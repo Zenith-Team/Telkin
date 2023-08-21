@@ -1,4 +1,6 @@
 *.s
 *.bat
 *.mjs
-tool/
+# Common js gitignore
+**/node_modules/
+package-lock.json
