@@ -17,7 +17,7 @@ namespace tloader {
     ENUM_CLASS(DataMagic,
         BranchHook = 0x01C0FFEE,
         PointerHook = 0x02C0FFEE,
-        Patch = 0x03C0FFEE,
+        Patch = 0x03C0FFEE
     );
 }
 
@@ -26,7 +26,7 @@ namespace tloader {
     public:
         enum Type {
             Type_b,
-            Type_bl,
+            Type_bl
         };
 
     public:

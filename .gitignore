@@ -1,1 +1,4 @@
 *.s
+*.bat
+*.mjs
+tool/

@@ -28,22 +28,29 @@ s32 (*FSReadFile)(void* client, void* cmd, void* buffer, s32 size, s32 count, s3
 s32 (*FSCloseFile)(void* client, void* cmd, s32 fd, s32 errHandling) = 0;
 
 char logMsg[512];
-#define LOG(FMT, ARGS...) do { __os_snprintf(logMsg, sizeof(logMsg), FMT, ## ARGS); OSConsoleWrite(logMsg, sizeof(logMsg)); } while(0)
+#define LOG(FMT, ARGS...) do { __os_snprintf(logMsg, sizeof(logMsg), "\n" FMT, ## ARGS); OSConsoleWrite(logMsg, sizeof(logMsg)); for (u32 i = 0; i < sizeof(logMsg); i++) {logMsg[i]=0;} } while(0)
 
 void initRPL(const char*);
 
-extern "C" void init() {
+inline uintptr_t extractAddrFromInstr(const u32* instr) {
+    uintptr_t ret = *instr & 0x03FFFFFCU;
+    if (!(*instr & 2)) {
+        // sign extend offset
+        if (ret & 0x02000000U)
+        ret |= 0xFE000000U;
+        // make relative
+        ret += (uintptr_t)instr;
+    }
+    return ret;
+}
+
+extern "C" void __tloader_init() {
     static bool initialized = false;
     if (initialized) return;
     initialized = true;
 
-    osSpecifics.addr_OSDynLoad_Acquire    = (u32)(BLOSDynLoad_Acquire   & 0x03FFFFFC);
-    osSpecifics.addr_OSDynLoad_FindExport = (u32)(BOSDynLoad_FindExport & 0x03FFFFFC);
-
-    if (!(BLOSDynLoad_Acquire & 2))
-        osSpecifics.addr_OSDynLoad_Acquire    += (u32)&BLOSDynLoad_Acquire;
-    if (!(BOSDynLoad_FindExport & 2))
-        osSpecifics.addr_OSDynLoad_FindExport += (u32)&BOSDynLoad_FindExport;
+    osSpecifics.addr_OSDynLoad_Acquire    = extractAddrFromInstr(&BLOSDynLoad_Acquire);
+    osSpecifics.addr_OSDynLoad_FindExport = extractAddrFromInstr(&BOSDynLoad_FindExport);
 
     OSDynLoad_Acquire = (s32 (*)(const char*, u32*))osSpecifics.addr_OSDynLoad_Acquire;
     OSDynLoad_FindExport = (s32 (*)(u32, s32, const char*, void*))osSpecifics.addr_OSDynLoad_FindExport;
@@ -66,6 +73,8 @@ extern "C" void init() {
     OSDynLoad_FindExport(coreinitHandle, false, "FSOpenFile", &funcPointer); *(u32*)(((u32)&FSOpenFile) + 0) = (u32)funcPointer;
     OSDynLoad_FindExport(coreinitHandle, false, "FSReadFile", &funcPointer); *(u32*)(((u32)&FSReadFile) + 0) = (u32)funcPointer;
     OSDynLoad_FindExport(coreinitHandle, false, "FSCloseFile", &funcPointer); *(u32*)(((u32)&FSCloseFile) + 0) = (u32)funcPointer;
+
+    LOG("Telkin v0.1.0");
 
     FSInit();
 
@@ -100,21 +109,26 @@ extern "C" void init() {
 
     if (*buffer == NULL) {
         LOG("rpl.txt is empty or non-existent, no RPLs to load.");
+
+        goto end;
     } else {
-        LOG("RPLs: %s", (char*)buffer);
+        LOG("RPLs: \n-----\n%s-----", (char*)buffer);
     }
 
-    char* line = (char*)buffer;
-    for (u32 i = 0; i < BUFFER_SIZE; i++) {
-        if (buffer[i] == '\n') {
-            buffer[i] = '\0';
+    {
+        char* line = (char*)buffer;
+        for (u32 i = 0; i < BUFFER_SIZE; i++) {
+            if (buffer[i] == '\n') {
+                buffer[i] = '\0';
 
-            initRPL(line);
+                initRPL(line);
 
-            line = (char*)(buffer + i + 1);
+                line = (char*)(buffer + i + 1);
+            }
         }
     }
 
+end:
     FSCloseFile(client, cmd, handle, FS_RET_NO_ERROR);
     MEMFreeToDefaultHeap(client);
     MEMFreeToDefaultHeap(cmd);
@@ -127,16 +141,18 @@ void initRPL(const char* rplName) {
     //*------------
     u32 rpl = 0;
     if (OSDynLoad_Acquire(rplName, &rpl)) {
-        LOG("Unable to acquire rpl: %s", rplName);
+        LOG("Unable to acquire RPL: %s", rplName);
         return;
     }
+
+    LOG("Applying RPL: %s", rplName);
 
     //*------------
     //* Step 1: Find start of hooks array
     //*------------
     struct {u32 _[4];}* patches;
-    if (OSDynLoad_FindExport(rpl, true, _tLoaderSectionNameData, &patches)) {
-        LOG("Unable to find .loaderdata!");
+    if (OSDynLoad_FindExport(rpl, true, _tLoaderSectionNameData, &patches) || (u32)patches == 0xFFFFFFFF) {
+        LOG("Unable to find .loaderdata! Does %s exist in /code/?", rplName);
         return;
     }
 
@@ -147,7 +163,7 @@ void initRPL(const char* rplName) {
     //*------------
     for (u32 i = 0;; i++) {
         switch (patches[i]._[0]) {
-            default: LOG("Loader complete, applied %u hooks", i); return;
+            default: LOG("Applied %u hooks from this RPL", i); return;
                 
             case tloader::DataMagic::BranchHook: {
                 tloader::BranchHook* hook = (tloader::BranchHook*)&patches[i];
@@ -163,6 +179,7 @@ void initRPL(const char* rplName) {
                     default: LOG("INVALID HOOK TYPE FOR HOOK AT: %x", (u32)hook->source); continue;
                 }
 
+                LOG("Writing branch hook: %x to %x", instr, (u32)hook->source);
                 *hook->source = instr;
 
                 break;
@@ -189,6 +206,8 @@ void initRPL(const char* rplName) {
 
                 u32 target = 0;
                 OSDynLoad_FindExport(rpl, hook->isData, hook->target, &target);
+
+                LOG("Writing pointer hook: %x to %x (target: %s)", target, (u32)hook->source, hook->target);
 
                 *hook->source = target;
                 
