@@ -150,23 +150,30 @@ void initRPL(const char* rplName) {
     //*------------
     //* Step 1: Find start of hooks array
     //*------------
-    struct {u32 _[4];}* patches;
-    if (OSDynLoad_FindExport(rpl, true, _tLoaderSectionNameData, &patches) || (u32)patches == 0xFFFFFFFF) {
-        LOG("Unable to find .loaderdata! Does %s exist in /code/?", rplName);
+    typedef tloader::HookList* (*__tloaderGetHookList_t)();
+    __tloaderGetHookList_t __tloaderGetHookList = 0;
+    int err = OSDynLoad_FindExport(rpl, 0, "__tloaderGetHookList__Fv", &__tloaderGetHookList);
+    if (err) {
+        LOG("could not find __tloaderGetHookList__Fv, err = 0x%08X\n", err);
         return;
     }
-
-    LOG(".loaderdata found at: %x", (u32)patches);
+    
+    tloader::HookList* hooks = __tloaderGetHookList();
+    LOG("Found hooks at 0x%x", hooks);
 
     //*------------
     //* Step 2: Apply hooks
     //*------------
-    for (u32 i = 0;; i++) {
-        switch (patches[i]._[0]) {
+    struct GenericHook { u32 magic; u32 _[3]; };
+    int i = 0;
+    for (tloader::HookListNode* hook_it = hooks->head; hook_it; hook_it = hook_it->next) {
+        GenericHook* genericHook = (GenericHook*)hook_it->hook;
+
+        switch (genericHook->magic) {
             default: LOG("Applied %u hooks from this RPL", i); return;
-                
+
             case tloader::DataMagic::BranchHook: {
-                tloader::BranchHook* hook = (tloader::BranchHook*)&patches[i];
+                tloader::BranchHook* hook = (tloader::BranchHook*)hook_it->hook;
 
                 u32 target = 0;
                 OSDynLoad_FindExport(rpl, false, hook->target, &target);
@@ -179,15 +186,17 @@ void initRPL(const char* rplName) {
                     default: LOG("INVALID HOOK TYPE FOR HOOK AT: %x", (u32)hook->source); continue;
                 }
 
-                LOG("Writing branch hook: %x to %x", instr, (u32)hook->source);
+                LOG("Writing branch hook: 0x%x to 0x%x", instr, (u32)hook->source);
                 *hook->source = instr;
 
                 break;
             }
 
             case tloader::DataMagic::Patch: {
-                tloader::Patch* patch = (tloader::Patch*)&patches[i];
-                
+                tloader::Patch* patch = (tloader::Patch*)hook_it->hook;
+
+                LOG("Applying patch at 0x%x", (u32)patch->data, (u32)patch->addr);
+
                 for (u16 i = 0; patch->count != 0; i++, patch->count--) {
                     switch (patch->dataSize) {
                         case 8:  *((u8*) patch->addr) = ((u8*) patch->data)[i]; *((u32*)&patch->addr) += 1; break;
@@ -202,10 +211,15 @@ void initRPL(const char* rplName) {
             }
 
             case tloader::DataMagic::PointerHook: {
-                tloader::PointerHook* hook = (tloader::PointerHook*)&patches[i];
+                tloader::PointerHook* hook = (tloader::PointerHook*)hook_it->hook;
 
                 u32 target = 0;
                 OSDynLoad_FindExport(rpl, hook->isData, hook->target, &target);
+
+                if (target == 0xFFFFFFFF) {
+                    LOG("Unable to find symbol: %s", hook->target);
+                    continue;
+                }
 
                 LOG("Writing pointer hook: %x to %x (target: %s)", target, (u32)hook->source, hook->target);
 
@@ -214,5 +228,7 @@ void initRPL(const char* rplName) {
                 break;
             }
         }
+
+        i++;
     }
 }

@@ -33,6 +33,7 @@ typedef unsigned int  uintptr_t;
 typedef signed int     intptr_t;
 
 #define NULL 0
+#define nullptr NULL
 
 #define ENUM_CLASS(name, ...)              \
     class name {virtual void This_error_means_you_forgot_to_write___type___in_an_object_instanciation()=0;public: \
