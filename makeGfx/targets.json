@@ -7,14 +7,6 @@
             "AcquireInstruction": "0x2A9EF58",
             "FindExportInstruction": "0x2A9F418",
             "InjectAddr": "0x2AFA050"
-        },
-        {
-            "Game": "NSMBUTest",
-            "Region": "EU",
-            "RPXHash": "0xAAAAAAAA",
-            "AcquireInstruction": "0xBBBBBBBB",
-            "FindExportInstruction": "0xCCCCCCCC",
-            "InjectAddr": "0xDDDDDDDD"
         }
     ]
 }
