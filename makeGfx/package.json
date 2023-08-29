@@ -1,10 +1,11 @@
 {
-  "name": "tool",
+  "name": "telkin-make-gfx",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
+  "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "run": "tsx index.ts ../main.s patch_Loader.asm"
   },
   "author": "",
   "license": "ISC",

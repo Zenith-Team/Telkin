@@ -1,9 +1,10 @@
-/// <reference lib="esnext" />
-
 import { readFileSync, writeFileSync } from "fs";
 import crlf from "crlf-normalize";
 
-let file = readFileSync("./main.s", "utf8");
+
+
+const args: string[] = process.argv.slice(2);
+let file: string = readFileSync(args[0]!, "utf8");
 
 // remove comments (they start with '#')
 file = file.replace(/#.*/g, "");
@@ -79,25 +80,39 @@ file = file.replace(/^\s*[\r\n]/gm, "");
 
 // remove indents and 4 spaces
 file = file.replace(/^\t+/gm, "");
-file = file.replace(/^    +/gm, "");	
+file = file.replace(/^    +/gm, "");
 
-function MakeTelkinUS(file) {
+interface TargetType {
+    Game: string;
+    Region: "US" | "EU" | "JP" | string;
+    RPXHash: string; // these should be numbers - ex "0x12345678"
+    AcquireInstruction: string;
+    FindExportInstruction: string;
+    InjectAddr: string;
+}
+function TelkinDefineRegion(file: string, makeArgs: TargetType): string {
 	const header =
-`[NSMBU_TLoader_US] ; Telkin Loader
-moduleMatches = 0x6CAEA914
+`[${makeArgs.Game}_TLoader_${makeArgs.Region}] ; Telkin Loader - Built on ${new Date().toLocaleString()}
+moduleMatches = ${makeArgs.RPXHash}
 
-BLOSDynLoad_Acquire = 0x2A9EF58
-BOSDynLoad_FindExport = 0x2A9F418
+BLOSDynLoad_Acquire = ${makeArgs.AcquireInstruction}
+BOSDynLoad_FindExport = ${makeArgs.FindExportInstruction}
 
 .origin = codecave`;
 
-	const footer = `0x2AFA050 = b __tloader_init`;
+	const footer = `${makeArgs.InjectAddr} = b __tloader_init`;
 
 	return header + "\r\n" + file + "\r\n" + footer;
 }
 
-file = MakeTelkinUS(file);
+let outFile: string = "";
+
+const targets: TargetType[] = (await import("./targets.json", { assert: { type: "json" }})).default.targets;
+
+for (const target of targets) {
+    outFile += TelkinDefineRegion(file, target) + "\r\n\r\n";
+}
 
 // convert to CRLF
-file = crlf(file);
-writeFileSync(process.argv[2], file, "utf8");
+outFile = crlf(outFile);
+writeFileSync(args[1]!, outFile, "utf8");
