@@ -116,3 +116,5 @@ for (const target of targets) {
 // convert to CRLF
 outFile = crlf(outFile);
 writeFileSync(args[1]!, outFile, "utf8");
+
+console.log(`File written as ${args[1]}`);
