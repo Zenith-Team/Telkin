@@ -74,6 +74,7 @@ file = file.replace("subic.	r6, r6, 1", ".byte 0x34, 0xC6, 0xFF, 0xFF");
 file = file.replace("subic.	r9, r9, 1", ".byte 0x35, 0x29, 0xFF, 0xFF");
 file = file.replace("subic.	r8, r8, 1", ".byte 0x35, 0x08, 0xFF, 0xFF");
 file = file.replace("subic.	r7, r7, 1", ".byte 0x34, 0xE7, 0xFF, 0xFF");
+file = file.replace("subic.	r11, r11, 1", ".byte 0x35, 0x6B, 0xFF, 0xFF");
 
 // remove empty lines
 file = file.replace(/^\s*[\r\n]/gm, "");

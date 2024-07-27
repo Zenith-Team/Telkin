@@ -27,8 +27,14 @@ s32 (*FSOpenFile)(void* client, void* cmd, const char* path, const char* mode, s
 s32 (*FSReadFile)(void* client, void* cmd, void* buffer, s32 size, s32 count, s32 fd, s32 flag, s32 errHandling) = 0;
 s32 (*FSCloseFile)(void* client, void* cmd, s32 fd, s32 errHandling) = 0;
 
+extern "C" s32 strlength(const char* str) {
+    s32 len = 0;
+    while (*str++) len++;
+    return len;
+}
+
 char logMsg[512];
-#define LOG(FMT, ARGS...) do { __os_snprintf(logMsg, sizeof(logMsg), "\n" FMT, ## ARGS); OSConsoleWrite(logMsg, sizeof(logMsg)); for (u32 i = 0; i < sizeof(logMsg); i++) {logMsg[i]=0;} } while(0)
+#define LOG(FMT, ARGS...) do { __os_snprintf(logMsg, sizeof(logMsg), "\n" FMT, ## ARGS); OSConsoleWrite(logMsg, strlength(logMsg)); for (u32 i = 0; i < sizeof(logMsg); i++) {logMsg[i]=0;} } while(0)
 
 void initRPL(const char*);
 
