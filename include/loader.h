@@ -3,6 +3,8 @@
 #include "types.h"
 #include <new>
 
+#define TK_MAX_HOOKS 0x4000
+
 #define PRAGMA(x) _Pragma(#x)
 #define CUSTOM_SECTION(sect, name) PRAGMA(ghs section sect = name)
 
@@ -66,7 +68,7 @@ namespace tloader {
 
 }
 
-tloader::HookList* __tloaderGetHookList();
+extern tloader::HookList* __tloaderGetHookList();
 
 namespace tloader {
     class BranchHook {
@@ -158,3 +160,5 @@ static_assert(sizeof(tloader::BranchHook) == sizeof(tloader::PointerHook), "Bran
 #define tPatch16(addr, ...) _tPatch(addr, 16, __VA_ARGS__)
 #define tPatch32(addr, ...) _tPatch(addr, 32, __VA_ARGS__)
 #define tPatch64(addr, ...) _tPatch(addr, 64, __VA_ARGS__)
+
+#define tPatchNop(addr) tPatch32(addr, 0x60000000)
