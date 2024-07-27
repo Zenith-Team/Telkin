@@ -34,7 +34,7 @@ extern "C" s32 strlength(const char* str) {
 }
 
 char logMsg[512];
-#define LOG(FMT, ARGS...) do { __os_snprintf(logMsg, sizeof(logMsg), "\n" FMT, ## ARGS); OSConsoleWrite(logMsg, strlength(logMsg)); for (u32 i = 0; i < sizeof(logMsg); i++) {logMsg[i]=0;} } while(0)
+#define LOG(FMT, ...) do { __os_snprintf(logMsg, sizeof(logMsg), "\n" FMT, ## __VA_ARGS__); OSConsoleWrite(logMsg, strlength(logMsg)); for (u32 i = 0; i < sizeof(logMsg); i++) {logMsg[i]=0;} } while(0)
 
 void initRPL(const char*);
 
