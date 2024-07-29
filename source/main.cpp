@@ -154,12 +154,25 @@ void initRPL(const char* rplName) {
     LOG("Applying RPL: %s", rplName);
 
     //*------------
+    //* Step 0.5: Call initialize on the RPL
+    //*------------
+    typedef void (*__tloaderInit_t)(u32, u32);
+    __tloaderInit_t __tloaderInit = 0;
+    int err = OSDynLoad_FindExport(rpl, 0, "__tloaderInit__FUiUi", &__tloaderInit);
+    if (err || !__tloaderInit) {
+        LOG("could not find __tloaderInit__FUiUi, err = 0x%08X\n", err);
+        return;
+    }
+
+    __tloaderInit(osSpecifics.addr_OSDynLoad_Acquire, osSpecifics.addr_OSDynLoad_FindExport);
+
+    //*------------
     //* Step 1: Find start of hooks array
     //*------------
     typedef tloader::HookList* (*__tloaderGetHookList_t)();
     __tloaderGetHookList_t __tloaderGetHookList = 0;
-    int err = OSDynLoad_FindExport(rpl, 0, "__tloaderGetHookList__Fv", &__tloaderGetHookList);
-    if (err) {
+    err = OSDynLoad_FindExport(rpl, 0, "__tloaderGetHookList__Fv", &__tloaderGetHookList);
+    if (err || !__tloaderGetHookList) {
         LOG("could not find __tloaderGetHookList__Fv, err = 0x%08X\n", err);
         return;
     }
