@@ -314,16 +314,6 @@ bool initRPL(const char* rplName) {
     
     const char* const modID = getModID();
     LOG("Mod ID: %s", modID);
-
-    // Call start function on RPL
-    using start_t = void (*)(u32, u32);
-    start_t start = nullptr;
-    err = OSDynLoad_FindExport(rpl, 0, "__rpl_start", &start);
-    if (err != 0 || start == nullptr) {
-        LOG("Could not find __rpl_start, err = 0x%08X, ptr = 0x%08X", err, reinterpret_cast<u32>(start));
-        return false;
-    }
-    start(OS_SPECIFICS->addr_OSDynLoad_Acquire, OS_SPECIFICS->addr_OSDynLoad_FindExport);
     
     // Hook definition
     struct GenericHook {
@@ -332,26 +322,21 @@ bool initRPL(const char* rplName) {
     };
     
     // Find hooks
-    using loader_get_t = GenericHook* (*)();
-    
-    loader_get_t getStart = nullptr;
-    err = OSDynLoad_FindExport(rpl, 0, "loaderdata_start", &getStart);
-    if (err != 0 || getStart == nullptr) {
-        LOG("Could not find loaderdata_start, err = 0x%08X, ptr = 0x%08X", err, reinterpret_cast<u32>(getStart));
+    GenericHook* hooksBegin = nullptr;
+    err = OSDynLoad_FindExport(rpl, 1, "__loaderdata_start", &hooksBegin);
+    if (err != 0 || hooksBegin == nullptr) {
+        LOG("Could not find data loaderdata_start, err = 0x%08X, ptr = 0x%08X", err, reinterpret_cast<u32>(hooksBegin));
         return false;
     }
     
-    loader_get_t getEnd = nullptr;
-    err = OSDynLoad_FindExport(rpl, 0, "loaderdata_end", &getEnd);
-    if (err != 0 || getEnd == nullptr) {
-        LOG("Could not find loaderdata_end, err = 0x%08X, ptr = 0x%08X", err, reinterpret_cast<u32>(getEnd));
+    GenericHook* hooksEnd = nullptr;
+    err = OSDynLoad_FindExport(rpl, 1, "__loaderdata_end", &hooksEnd);
+    if (err != 0 || hooksEnd == nullptr) {
+        LOG("Could not find data loaderdata_end, err = 0x%08X, ptr = 0x%08X", err, reinterpret_cast<u32>(hooksEnd));
         return false;
     }
     
-    GenericHook* hooksBegin = getStart();
-    GenericHook* hooksEnd = getEnd();
-    
-    LOG("DEBUG: Hooks begin at 0x%08X, end at 0x%08X", reinterpret_cast<u32>(hooksBegin), reinterpret_cast<u32>(hooksEnd));
+    LOG("DEBUG: DATA Hooks begin at 0x%08X, end at 0x%08X", reinterpret_cast<u32>(hooksBegin), reinterpret_cast<u32>(hooksEnd));
     if (hooksBegin == nullptr || hooksEnd == nullptr || hooksBegin >= hooksEnd) {
         LOG("Hooks are bad");
         return false;
@@ -394,8 +379,16 @@ bool initRPL(const char* rplName) {
     }
 
     LOG("(B) Applied %u hooks from this RPL: ", hookCount);
-
-
+    
+    // Call start function on RPL
+    using start_t = void (*)(u32, u32);
+    start_t start = nullptr;
+    err = OSDynLoad_FindExport(rpl, 0, "__rpl_start", &start);
+    if (err != 0 || start == nullptr) {
+        LOG("Could not find __rpl_start, err = 0x%08X, ptr = 0x%08X", err, reinterpret_cast<u32>(start));
+        return false;
+    }
+    start(OS_SPECIFICS->addr_OSDynLoad_Acquire, OS_SPECIFICS->addr_OSDynLoad_FindExport);
     
     return true;
 }
