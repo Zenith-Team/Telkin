@@ -1,0 +1,12 @@
+{
+    "targets": [
+        {
+            "title_id": "0005000010101D00",
+            "hash": "0x6CAEA914",
+            "acquire_instr": "0x2A9EF58",
+            "export_instr": "0x2A9F418",
+            "inject_addr": "0x2AFA050",
+            "call_ctors": "0x2AF9FD0"
+        }
+    ]
+}

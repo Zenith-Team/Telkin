@@ -1,0 +1,4 @@
+name = Telkin Loader
+path = "Mods/Telkin Loader"
+description = Dynamic code loader.||Made by Zenith Team.
+version = 6
