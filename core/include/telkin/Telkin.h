@@ -52,6 +52,7 @@ namespace tk {
     static_assert(std::is_trivially_constructible<PatchHook>::value, "PatchHook is not trivially constructible");
     static_assert(std::is_trivially_destructible<PatchHook>::value, "PatchHook is not trivially destructible");
 
+    using startfunc_t = void (*)(u32, u32);
 }
 
 #define tHook(addr, target, type) \
