@@ -20,6 +20,9 @@
 #include <dynamic_libs/vpad_functions.h>
 #include <dynamic_libs/zlib_functions.h>
 
+#include "Debug.h"
+#include "Lists.h"
+
 
 /*
    ______    ____    _
@@ -34,9 +37,6 @@
           |__/                         /___/
 */
 
-#include "Debug.h"
-#include "Lists.h"
-
 namespace tk {
     bool loadRPL(const char* rplName, tk::HookList& hookList, tk::FunctionList& startFuncs);
     
@@ -47,7 +47,7 @@ extern "C" {
     using funcPtr = void (*)();
     extern funcPtr __init_array_start[], __init_array_end[];
     
-    void __rpl_crt() {} // Called by Cafe OS on acquire, don't do anything here
+    void __rpl_crt() { } // Called by Cafe OS on acquire, don't do anything here
 }
 
 extern "C" void init(u32 acquireAddr, u32 exportAddr, funcPtr callCtors) {
@@ -191,7 +191,6 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, funcPtr callCtors) {
 }
 
 namespace tk {
-
 
 bool loadRPL(const char* rplName, HookList& hookList, FunctionList& startFuncs) {
     // Acquire RPL
