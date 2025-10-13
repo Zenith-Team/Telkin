@@ -19,6 +19,7 @@
 #include <dynamic_libs/syshid_functions.h>
 #include <dynamic_libs/vpad_functions.h>
 #include <dynamic_libs/zlib_functions.h>
+#include <utility>
 
 /*
    ______    ____    _
@@ -37,11 +38,25 @@ char logMsg[512];
 s32 strlength(const char* str) { s32 len = 0; while (*str++) len++; return len; }
 #define LOG(FMT, ...) do { __os_snprintf(logMsg, sizeof(logMsg), "" FMT "\n", ## __VA_ARGS__); OSConsoleWrite(logMsg, strlength(logMsg)); OSBlockSet(logMsg, 0, sizeof(logMsg)); } while (0)
 
+using start_t = void (*)(u32, u32);
+
 //using MemCopy_t = void (*)(void* dst, void* src, s32 bytes);
 //MemCopy_t MemCopy = nullptr; // Kernel-privileged copy on console, standard memcpy on Cemu.
 
+class HookList;
+class FunctionList;
+
+struct GenericHook {
+    tk::DataMagic magic;
+    u8 _[tk::cHookSize - sizeof(magic)];
+};
+
 namespace tk { // forward declaration
-    bool initRPL(const char* rplName);
+    bool loadRPL(const char* rplName, HookList& hookList, FunctionList& startFuncs);
+    
+    bool applyBranchHook(const tk::BranchHook* hook);
+    bool applyPointerHook(const tk::PointerHook* hook);
+    bool applyPatchHook(const tk::PatchHook* hook);
 }
 
 extern "C" {
@@ -50,6 +65,169 @@ extern "C" {
     
     void __rpl_crt() {} // Called by Cafe OS on acquire, don't do anything here
 }
+
+template <typename T>
+class MyVector {
+private:
+    static constexpr u32 cGrowthFactor = 2;
+
+public:
+    MyVector()
+        : mBuffer(nullptr)
+        , mCount(0)
+        , mCapacity(0)
+    { }
+    
+    ~MyVector() {
+        if (mBuffer != nullptr)
+            MEMFreeToDefaultHeap(mBuffer);
+    }
+    
+    MyVector(const MyVector&) = delete;
+    MyVector& operator=(const MyVector&) = delete;
+
+    void add(T entry) {
+        mCount++;
+        
+        if (mBuffer == nullptr) {
+            mCapacity = mCount * cGrowthFactor;
+            mBuffer = (T*)MEMAllocFromDefaultHeap(mCapacity * sizeof(T));
+            
+            if (mBuffer == nullptr) {
+                LOG("Sorry, out of memory. (A)");
+            }
+        } else if (mCount > mCapacity) {
+                mCapacity = mCapacity * cGrowthFactor;
+                
+                T* newBuffer = (T*)MEMAllocFromDefaultHeap(mCapacity * sizeof(T));
+                if (newBuffer == nullptr) {
+                    LOG("Sorry, out of memory. (B)");
+                }
+                
+                OSBlockMove(newBuffer, mBuffer, mCount * sizeof(T), false);
+                
+                MEMFreeToDefaultHeap(mBuffer);
+                mBuffer = newBuffer;
+        }
+        
+        mBuffer[mCount - 1] = entry;
+    }
+    
+    [[nodiscard]] T* data() { return mBuffer; }
+    [[nodiscard]] s32 count() const { return mCount; }
+    
+private:
+    T* mBuffer;    // Storage
+    s32 mCount;    // Full slots
+    s32 mCapacity; // Total slots we have
+};
+
+class HookList {
+public:
+    void add(const void* hook, u32 startAddr, u32 endAddr) {
+        const GenericHook* h = reinterpret_cast<const GenericHook*>(hook);
+        
+        const HookEntry entry = {
+            .hook = h,
+            .startAddr = startAddr,
+            .endAddr = endAddr
+        };
+        
+        mVector.add(entry);
+    }
+    
+    bool validateRanges() {
+        if (mVector.count() <= 1)
+            return true;
+        
+        sort();
+        
+        for (s32 i = 1; i < mVector.count(); i++) {
+            if (mVector.data()[i].startAddr < mVector.data()[i - 1].endAddr) {
+                // TODO: Better diagnostic here with mod blame and addrs/types
+                LOG("MOD INCOMPATIBILITY: Overlapping hooks found!");
+                return false;
+            }
+        }
+        
+        LOG("No hook conflicts found :)");
+        return true;
+    }
+    
+    bool applyAll() {
+        for (s32 i = 0; i < mVector.count(); i++) {
+            const HookEntry& entry = mVector.data()[i];
+            const GenericHook* hook = entry.hook;
+            
+            switch (hook->magic) {
+                case tk::DataMagic::BranchHook: {
+                    if (!tk::applyBranchHook(reinterpret_cast<const tk::BranchHook*>(hook)))
+                        return false;
+                    
+                    break;
+                }
+                
+                case tk::DataMagic::PatchHook: {
+                    if (!tk::applyPatchHook(reinterpret_cast<const tk::PatchHook*>(hook)))
+                        return false;
+                    
+                    break;
+                }
+                
+                case tk::DataMagic::PointerHook: {
+                    if (!tk::applyPointerHook(reinterpret_cast<const tk::PointerHook*>(hook)))
+                        return false;
+                    
+                    break;
+                }
+            }
+        }
+        
+        return true;
+    }
+    
+private:
+    void sort() {
+        // TODO: This is bubble sort, optimize it later <3
+        
+        s32 n = mVector.count();
+        do {
+            s32 newN = 0;
+            for (int i = 1; i <= (n-1); i++) {
+                if (mVector.data()[i-1].startAddr > mVector.data()[i].startAddr) {
+                    std::swap(mVector.data()[i-1], mVector.data()[i]);
+                    newN = i;
+                }
+            }
+            
+            n = newN;
+        } while (n > 1);
+    }
+
+private:
+    struct HookEntry {
+        const GenericHook* hook;
+        u32 startAddr;
+        u32 endAddr;
+    };
+    
+    MyVector<HookEntry> mVector;
+};
+
+class FunctionList {
+public:
+    void add(start_t func) {
+        mFuncs.add(func);
+    }
+    
+    void callAll(u32 acquireAddr, u32 exportAddr) {
+        for (s32 i = 0; i < mFuncs.count(); i++)
+            mFuncs.data()[i](acquireAddr, exportAddr);
+    }
+    
+private:
+    MyVector<start_t> mFuncs;
+};
 
 extern "C" void init(u32 acquireAddr, u32 exportAddr, funcPtr callCtors) {
     static bool initialized = false;
@@ -83,7 +261,7 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, funcPtr callCtors) {
     InitSysHIDFunctionPointers();
     InitVPadFunctionPointers();
     InitZlibFunctionPointers();
-
+    
     LOG("Telkin v0.1 by Zenith");
 
     FSInit();
@@ -145,20 +323,29 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, funcPtr callCtors) {
     } else {
         LOG("rpl.txt was read");
     }
+    
+    { // Scoped to deallocate the memory used by HookList and FunctionList
+        HookList hookList;
+        FunctionList startFuncs;
 
-    char* line = (char*)buffer;
-    for (u32 i = 0; i < cBufferSize; i++) {
-        if (buffer[i] == '\n') { // TODO: Support CRLF
-            buffer[i] = '\0';
+        char* line = (char*)buffer;
+        for (u32 i = 0; i < cBufferSize; i++) {
+            if (buffer[i] == '\n') { // TODO: Support CRLF
+                buffer[i] = '\0';
+                
+                tk::loadRPL(line, hookList, startFuncs);
+                LOG("Finished loading RPL: %s", line);
 
-            tk::initRPL(line);
-
-            LOG("Finished loading RPL: %s", line);
-
-            line = (char*)(buffer + i + 1);
+                line = (char*)(buffer + i + 1);
+            }
         }
+        
+        hookList.validateRanges();
+        hookList.applyAll();
+        
+        startFuncs.callAll(OS_SPECIFICS->addr_OSDynLoad_Acquire, OS_SPECIFICS->addr_OSDynLoad_FindExport);
     }
-
+    
     FSCloseFile(client, cmd, handle, FS_RET_NO_ERROR);
     LOG("FSCloseFile OK");
     MEMFreeToDefaultHeap(client);
@@ -173,18 +360,10 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, funcPtr callCtors) {
 
 namespace tk {
 
-bool applyBranchHook(u32 rpl, void* hookPtr) {
-    const tk::BranchHook* hook = reinterpret_cast<tk::BranchHook*>(hookPtr);
+bool applyBranchHook(const tk::BranchHook* hook) {
     const u32 addr = reinterpret_cast<u32>(hook->source);
 
-    u32 target = 0;
-    s32 err = OSDynLoad_FindExport(rpl, false, hook->target, &target);
-    if (err != 0 || target == 0 || target == 0xFFFFFFFF) {
-        LOG("Could not find branch hook target: %s for patch at: 0x%08X", hook->target, addr);
-        return false;
-    }
-
-    u32 instr = (target - addr) & 0x03FFFFFC; // TODO: Validate range
+    u32 instr = (reinterpret_cast<u32>(hook->target) - addr) & 0x03FFFFFC; // TODO: Validate range
 
     switch (hook->type) {
         default: {
@@ -213,28 +392,19 @@ bool applyBranchHook(u32 rpl, void* hookPtr) {
     return true;
 }
 
-bool applyPointerHook(u32 rpl, void* hookPtr) {
-    const tk::PointerHook* hook = reinterpret_cast<const tk::PointerHook*>(hookPtr);
+bool applyPointerHook(const tk::PointerHook* hook) {
     const u32 addr = reinterpret_cast<u32>(hook->source);
 
-    u32 target = 0;
-    s32 err = OSDynLoad_FindExport(rpl, hook->isData, hook->target, &target);
-    if (err != 0 || target == 0 || target == 0xFFFFFFFF) {
-        LOG("Could not find pointer hook target: %s for patch at: 0x%08X", hook->target, addr);
-        return false;
-    }
+    LOG("Writing pointer hook: 0x%08X to 0x%08X", addr, hook->target);
 
-    LOG("Writing pointer hook: 0x%08X to 0x%08X (target: %s)", target, addr, hook->target);
-
-    *hook->source = target;
+    *hook->source = reinterpret_cast<u32>(hook->target);
 
     DCFlushRange(hook->source, sizeof(void*));
 
     return true;
 }
 
-bool applyPatchHook(u32 rpl, void* hookPtr) {
-    const tk::PatchHook* patch = reinterpret_cast<tk::PatchHook*>(hookPtr);
+bool applyPatchHook(const tk::PatchHook* patch) {
     const u32 addr = reinterpret_cast<u32>(patch->addr);
     const u32 totalSize = patch->count * (patch->dataSize / 8);
 
@@ -275,7 +445,65 @@ bool applyPatchHook(u32 rpl, void* hookPtr) {
     return true;
 }
 
-bool initRPL(const char* rplName) {
+bool readBranchHook(u32 rpl, void* hookPtr, HookList& list) {
+    tk::BranchHook* hook = reinterpret_cast<tk::BranchHook*>(hookPtr);
+    const u32 addr = reinterpret_cast<u32>(hook->source);
+
+    u32 target = 0;
+    s32 err = OSDynLoad_FindExport(rpl, false, hook->target, &target);
+    if (err != 0 || target == 0 || target == 0xFFFFFFFF) {
+        LOG("Could not find branch hook target: %s for patch at: 0x%08X", hook->target, addr);
+        return false;
+    }
+
+    hook->target = reinterpret_cast<const char*>(target); //* We are resolving this string early while we still have access to the RPL and reusing the pointer field for the final address
+    
+    list.add(hook, addr, addr + sizeof(u32));
+
+    return true;
+}
+
+bool readPointerHook(u32 rpl, void* hookPtr, HookList& list) {
+    tk::PointerHook* hook = reinterpret_cast<tk::PointerHook*>(hookPtr);
+    const u32 addr = reinterpret_cast<u32>(hook->source);
+
+    u32 target = 0;
+    s32 err = OSDynLoad_FindExport(rpl, hook->isData, hook->target, &target);
+    if (err != 0 || target == 0 || target == 0xFFFFFFFF) {
+        LOG("Could not find pointer hook target: %s for patch at: 0x%08X", hook->target, addr);
+        return false;
+    }
+
+    hook->target = reinterpret_cast<const char*>(target); //* We are resolving this string early while we still have access to the RPL and reusing the pointer field for the final address
+
+    list.add(hook, addr, addr + sizeof(void*));
+
+    return true;
+}
+
+bool readPatchHook(void* hookPtr, HookList& list) {
+    const tk::PatchHook* patch = reinterpret_cast<tk::PatchHook*>(hookPtr);
+    const u32 addr = reinterpret_cast<u32>(patch->addr);
+    const u32 totalSize = patch->count * (patch->dataSize / 8);
+
+    switch (patch->dataSize) {
+        default: {
+            LOG("Invalid patch unit size %u at addr 0x%08X", patch->dataSize, addr);
+            return false;
+        }
+
+        case 8:
+        case 16:
+        case 32:
+            break;
+    }
+    
+    list.add(patch, addr, addr + totalSize);
+
+    return true;
+}
+
+bool loadRPL(const char* rplName, HookList& hookList, FunctionList& startFuncs) {
     // Acquire RPL
     u32 rpl = 0;
     if (OSDynLoad_Acquire(rplName, &rpl) != 0) {
@@ -301,8 +529,6 @@ bool initRPL(const char* rplName) {
         LOG("RPL %s title ID mismatch, OS: %08X%08X, RPL: %08X%08X", rplName, titleIDP1, titleID & 0xFFFFFFFFULL, rplTitleP1, rplTitleIDTarget & 0xFFFFFFFFULL);
         //return false; // TODO: Figure out why this fails and make it a fatal error
     }
-
-    LOG("Applying RPL: %s", rplName);
     
     using getModID_t = const char* (*)();
     getModID_t getModID = nullptr;
@@ -315,11 +541,14 @@ bool initRPL(const char* rplName) {
     const char* const modID = getModID();
     LOG("Mod ID: %s", modID);
     
-    // Hook definition
-    struct GenericHook {
-        tk::DataMagic magic;
-        u8 _[tk::cHookSize - sizeof(magic)];
-    };
+    // Read start function from RPL
+    start_t start = nullptr;
+    err = OSDynLoad_FindExport(rpl, 0, "__rpl_start", &start);
+    if (err != 0 || start == nullptr) {
+        LOG("Could not find __rpl_start, err = 0x%08X, ptr = 0x%08X", err, reinterpret_cast<u32>(start));
+        return false;
+    }
+    startFuncs.add(start);
     
     // Find hooks
     GenericHook* hooksBegin = nullptr;
@@ -342,28 +571,27 @@ bool initRPL(const char* rplName) {
         return false;
     }
 
-    // Apply hooks
-
+    // Read hooks
     static_assert(sizeof(GenericHook) == tk::cHookSize, "GenericHook size mismatch");
     u32 hookCount = 0;
     for (GenericHook* hook = hooksBegin; hook != hooksEnd; hook++) {
         switch (hook->magic) {
             case tk::DataMagic::BranchHook: {
-                if (!applyBranchHook(rpl, hook))
+                if (!readBranchHook(rpl, hook, hookList))
                     return false;
 
                 break;
             }
 
             case tk::DataMagic::PointerHook: {
-                if (!applyPointerHook(rpl, hook))
+                if (!readPointerHook(rpl, hook, hookList))
                     return false;
 
                 break;
             }
 
             case tk::DataMagic::PatchHook: {
-                if (!applyPatchHook(rpl, hook))
+                if (!readPatchHook(hook, hookList))
                     return false;
 
                 break;
@@ -378,17 +606,7 @@ bool initRPL(const char* rplName) {
         hookCount++;
     }
 
-    LOG("(B) Applied %u hooks from this RPL: ", hookCount);
-    
-    // Call start function on RPL
-    using start_t = void (*)(u32, u32);
-    start_t start = nullptr;
-    err = OSDynLoad_FindExport(rpl, 0, "__rpl_start", &start);
-    if (err != 0 || start == nullptr) {
-        LOG("Could not find __rpl_start, err = 0x%08X, ptr = 0x%08X", err, reinterpret_cast<u32>(start));
-        return false;
-    }
-    start(OS_SPECIFICS->addr_OSDynLoad_Acquire, OS_SPECIFICS->addr_OSDynLoad_FindExport);
+    LOG("Read %u hooks from this RPL: ", hookCount);
     
     return true;
 }
