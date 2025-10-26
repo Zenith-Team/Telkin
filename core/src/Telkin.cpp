@@ -38,7 +38,7 @@
 */
 
 namespace tk {
-    bool loadRPL(const char* rplName, tk::HookList& hookList, tk::FunctionList& startFuncs);
+    bool loadRPL(const char* rplName, tk::HookList& hookList, tk::FunctionList& startFuncs, u32 gameTitleID);
     
     char logMsg[tk::cLogBufferSize];
 }
@@ -148,20 +148,28 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, funcPtr callCtors) {
     { // Scoped to deallocate the memory used by HookList and FunctionList
         tk::HookList hooks;
         tk::FunctionList startFuncs;
-
+        
+        bool success = true;
+        u32 gameTitleID = static_cast<u32>(OSGetTitleID());
+        
         char* line = (char*)buffer;
         for (u32 i = 0; i < cBufferSize; i++) {
             if (buffer[i] == '\n') { // TODO: Support CRLF
                 buffer[i] = '\0';
                 
-                tk::loadRPL(line, hooks, startFuncs);
+                if (!tk::loadRPL(line, hooks, startFuncs, gameTitleID)) {
+                    success = false;
+                    LOG("RPL %s failed to load, aborting inject!");
+                    break;
+                }
+                
                 LOG("Finished loading RPL: %s", line);
 
                 line = (char*)(buffer + i + 1);
             }
         }
         
-        if (!hooks.validateRanges()) {
+        if (!success || !hooks.validateRanges()) {
             FSCloseFile(client, cmd, handle, FS_RET_NO_ERROR);
             MEMFreeToDefaultHeap(client);
             MEMFreeToDefaultHeap(cmd);
@@ -192,15 +200,13 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, funcPtr callCtors) {
 
 namespace tk {
 
-bool loadRPL(const char* rplName, HookList& hookList, FunctionList& startFuncs) {
+bool loadRPL(const char* rplName, HookList& hookList, FunctionList& startFuncs, u32 gameTitleID) {
     // Acquire RPL
     u32 rpl = 0;
     if (OSDynLoad_Acquire(rplName, &rpl) != 0) {
         LOG("Unable to acquire RPL: %s", rplName);
         return false;
     }
-    
-    u64 titleID = OSGetTitleID();
     
     using getTitleID_t = u64 (*)();
     getTitleID_t getTitleID = nullptr;
@@ -210,13 +216,10 @@ bool loadRPL(const char* rplName, HookList& hookList, FunctionList& startFuncs) 
         return false;
     }
 
-    u64 rplTitleIDTarget = getTitleID();
-    if (titleID != rplTitleIDTarget) {
-        u32 rplTitleP1 = (rplTitleIDTarget & 0xFFFFFFFF00000000ULL) >> 32;
-        u32 titleIDP1 = (titleID & 0xFFFFFFFF00000000ULL) >> 32;
-        
-        LOG("RPL %s title ID mismatch, OS: %08X%08X, RPL: %08X%08X", rplName, titleIDP1, titleID & 0xFFFFFFFFULL, rplTitleP1, rplTitleIDTarget & 0xFFFFFFFFULL);
-        //return false; // TODO: Figure out why this fails and make it a fatal error
+    u32 rplTitleIDTarget = static_cast<u32>(getTitleID());
+    if (gameTitleID != rplTitleIDTarget) {
+        LOG("RPL %s title ID mismatch, OS: %08X, RPL: %08X", rplName, gameTitleID, rplTitleIDTarget);
+        return false;
     }
     
     using getModID_t = const char* (*)();
