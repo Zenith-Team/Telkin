@@ -4,4 +4,13 @@
 *.rpl
 **/objs
 **/linker
+**/.tachyon
 compile_commands.json
+**/build/*
+**/.vscode/*
+**/vol/*
+*.cbp
+*.elf
+*.layout
+*.mod
+*.wps

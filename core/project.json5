@@ -1,29 +1,24 @@
 {
+    WURPLSVersion: "0.1",
+    
     Name: "Telkin",
-    WURPLSVersion: '0.1',
+    Version: "1.0.0",
     Freestanding: true,
     Initless: true,
-    
+
     IncludeDirs: [
         "include",
-        
-        // TODO Libs (Tachyon handle these)
-        "../../DynamicLibs/dynamic_libs/include",
-        "../../DynamicLibs/cafe_sdk/include",
-        
-        //! std (Tachyon definitely handle these)
-        "../../RedNewlib/abi",
-        "../../RedNewlib/c",
-        "../../RedNewlib/cxx"
+
+        "libs/DynamicLibs/dynamic_libs/include",
+        "libs/DynamicLibs/cafe_sdk/include",
     ],
-    
+
     SourceDirs: [
         "src",
         
-        // TODO Libs (Tachyon handle these)
-        "../../DynamicLibs/dynamic_libs/src"
+        "libs/DynamicLibs/dynamic_libs/src"
     ],
-    
+
     Targets: {
         Universal: {}
     }

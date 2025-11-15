@@ -1,0 +1,3 @@
+[submodule "core/libs/DynamicLibs"]
+	path = core/libs/DynamicLibs
+	url = https://github.com/Zenith-Team/DynamicLibs.git
