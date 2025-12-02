@@ -3,6 +3,7 @@
     
     Name: "Telkin",
     Version: "1.0.0",
+    Type: "Special",
     Freestanding: true,
     Initless: true,
 
