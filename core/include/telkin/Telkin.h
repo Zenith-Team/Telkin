@@ -52,7 +52,18 @@ namespace tk {
     static_assert(std::is_trivially_constructible<PatchHook>::value, "PatchHook is not trivially constructible");
     static_assert(std::is_trivially_destructible<PatchHook>::value, "PatchHook is not trivially destructible");
 
+    enum class ModuleType : u32 {
+        Null,
+        Special,
+        CoreMod,
+        CoreAPI,
+        Standard
+    };
+    
     using startfunc_t = void (*)(u32, u32);
+    using getTitleID_t = u64 (*)();
+    using getModID_t = const char* (*)();
+    using getModuleType_t = ModuleType (*)();
 }
 
 #define tHook(addr, target, type) \

@@ -38,7 +38,13 @@
 */
 
 namespace tk {
-    bool loadRPL(const char* rplName, tk::HookList& hookList, tk::FunctionList& startFuncs, u32 gameTitleID);
+    bool loadRPL(
+        const char* rplName,
+        tk::HookList& hookList, tk::FunctionList& startFuncs,
+        u32 gameTitleID,
+        bool& coreapiEncountered, HookList& coreapiHooks, startfunc_t& coreapiStartFunc,
+        bool& standardEncountered, bool& coremodEncountered
+    );
     
     char logMsg[tk::cLogBufferSize];
 }
@@ -149,7 +155,13 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, funcPtr callCtors) {
         tk::HookList hooks;
         tk::FunctionList startFuncs;
         
+        tk::HookList coreapiHooks;
+        tk::startfunc_t coreapiStartFunc;
+        
         bool success = true;
+        bool coreapiEncountered = false;
+        bool standardEncountered = false;
+        bool coremodEncountered = false;
         u32 gameTitleID = static_cast<u32>(OSGetTitleID());
         
         char* line = (char*)buffer;
@@ -157,7 +169,13 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, funcPtr callCtors) {
             if (buffer[i] == '\n') { // TODO: Support CRLF
                 buffer[i] = '\0';
                 
-                if (!tk::loadRPL(line, hooks, startFuncs, gameTitleID)) {
+                if (!tk::loadRPL(
+                    line, 
+                    hooks, startFuncs, 
+                    gameTitleID, 
+                    coreapiEncountered, coreapiHooks, coreapiStartFunc,
+                    standardEncountered, coremodEncountered
+                )) {
                     success = false;
                     LOG("RPL %s failed to load, aborting inject!");
                     break;
@@ -167,6 +185,16 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, funcPtr callCtors) {
 
                 line = (char*)(buffer + i + 1);
             }
+        }
+        
+        if (standardEncountered == true && coreapiEncountered == false) {
+            LOG("Attempted to load mods without a CoreAPI. Fix your dependencies. Aborting inject!");
+            success = false;
+        }
+
+        if (coreapiEncountered && coremodEncountered) {
+            LOG("Cannot load Core Mods when a CoreAPI is available. Please update your mod or remove the CoreAPI.");
+            success = false;
         }
         
         if (!success || !hooks.validateRanges()) {
@@ -179,7 +207,12 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, funcPtr callCtors) {
         }
         
         // here's the magic:
+        coreapiHooks.applyAll();
         hooks.applyAll();
+        coreapiStartFunc(
+            OS_SPECIFICS->addr_OSDynLoad_Acquire,
+            OS_SPECIFICS->addr_OSDynLoad_FindExport
+        );
         startFuncs.callAll(
             OS_SPECIFICS->addr_OSDynLoad_Acquire,
             OS_SPECIFICS->addr_OSDynLoad_FindExport
@@ -200,7 +233,13 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, funcPtr callCtors) {
 
 namespace tk {
 
-bool loadRPL(const char* rplName, HookList& hookList, FunctionList& startFuncs, u32 gameTitleID) {
+bool loadRPL(
+    const char* rplName,
+    HookList& hookList, FunctionList& startFuncs,
+    u32 gameTitleID,
+    bool& coreapiEncountered, HookList& coreapiHooks, startfunc_t& coreapiStartFunc,
+    bool& standardEncountered, bool& coremodEncountered
+) {
     // Acquire RPL
     u32 rpl = 0;
     if (OSDynLoad_Acquire(rplName, &rpl) != 0) {
@@ -208,7 +247,6 @@ bool loadRPL(const char* rplName, HookList& hookList, FunctionList& startFuncs, 
         return false;
     }
     
-    using getTitleID_t = u64 (*)();
     getTitleID_t getTitleID = nullptr;
     s32 err = OSDynLoad_FindExport(rpl, 0, "getTitleID", &getTitleID);
     if (err != 0 || getTitleID == nullptr) {
@@ -222,7 +260,6 @@ bool loadRPL(const char* rplName, HookList& hookList, FunctionList& startFuncs, 
         return false;
     }
     
-    using getModID_t = const char* (*)();
     getModID_t getModID = nullptr;
     err = OSDynLoad_FindExport(rpl, 0, "getModID", &getModID);
     if (err != 0 || getModID == nullptr) {
@@ -233,14 +270,79 @@ bool loadRPL(const char* rplName, HookList& hookList, FunctionList& startFuncs, 
     const char* const modID = getModID();
     LOG("Mod ID: %s", modID);
     
-    // Read start function from RPL
-    tk::startfunc_t start = nullptr;
-    err = OSDynLoad_FindExport(rpl, 0, "__rpl_start", &start);
-    if (err != 0 || start == nullptr) {
-        LOG("Could not find __rpl_start, err = 0x%08X, ptr = 0x%08X", err, reinterpret_cast<u32>(start));
+    // Check type
+    getModuleType_t getModuleType = nullptr;
+    err = OSDynLoad_FindExport(rpl, 0, "getModuleType", &getModuleType);
+    if (err != 0 || getModID == nullptr) {
+        LOG("Count not find getModuleType, err = 0x%08X, ptr = 0x%08X", err, reinterpret_cast<u32>(getModuleType));
         return false;
     }
-    startFuncs.add(start);
+    
+    HookList* outputHookList = &hookList;
+    
+    ModuleType moduleType = getModuleType();
+    switch (moduleType) {
+        case tk::ModuleType::CoreAPI: {
+            if (coreapiEncountered) {
+                LOG("Cannot load multiple CoreAPI modules simultaneously!");
+                return false;
+            }
+            
+            coreapiEncountered = true;
+            outputHookList = &coreapiHooks;
+            
+            // Read start function from RPL
+            tk::startfunc_t start = nullptr;
+            err = OSDynLoad_FindExport(rpl, 0, "__rpl_start", &start);
+            if (err != 0 || start == nullptr) {
+                LOG("Could not find __rpl_start, err = 0x%08X, ptr = 0x%08X", err, reinterpret_cast<u32>(start));
+                return false;
+            }
+            coreapiStartFunc = start;
+            
+            break;
+        }
+        
+        case tk::ModuleType::CoreMod: {
+            if (coreapiEncountered) {
+                LOG("Cannot load Core Mods when a CoreAPI is available. Please update your mod or remove the CoreAPI.");
+                return false;
+            }
+            
+            coremodEncountered = true;
+            
+            // Read start function from RPL
+            tk::startfunc_t start = nullptr;
+            err = OSDynLoad_FindExport(rpl, 0, "__rpl_start", &start);
+            if (err != 0 || start == nullptr) {
+                LOG("Could not find __rpl_start, err = 0x%08X, ptr = 0x%08X", err, reinterpret_cast<u32>(start));
+                return false;
+            }
+            startFuncs.add(start);
+            
+            break;
+        };
+        
+        case tk::ModuleType::Standard: {
+            // Read start function from RPL
+            tk::startfunc_t start = nullptr;
+            err = OSDynLoad_FindExport(rpl, 0, "__rpl_start", &start);
+            if (err != 0 || start == nullptr) {
+                LOG("Could not find __rpl_start, err = 0x%08X, ptr = 0x%08X", err, reinterpret_cast<u32>(start));
+                return false;
+            }
+            startFuncs.add(start);
+            
+            standardEncountered = true;
+            
+            break;
+        }
+        
+        case tk::ModuleType::Special: {
+            LOG("WARNING: Why are you using ModuleType Special? It does nothing for you.");
+            break;
+        }
+    }
     
     // Find hooks
     GenericHook* hooksBegin = nullptr;
@@ -269,21 +371,21 @@ bool loadRPL(const char* rplName, HookList& hookList, FunctionList& startFuncs, 
     for (GenericHook* hook = hooksBegin; hook != hooksEnd; hook++) {
         switch (hook->magic) {
             case tk::DataMagic::BranchHook: {
-                if (!readBranchHook(rpl, hook, hookList))
+                if (!readBranchHook(rpl, hook, *outputHookList))
                     return false;
 
                 break;
             }
 
             case tk::DataMagic::PointerHook: {
-                if (!readPointerHook(rpl, hook, hookList))
+                if (!readPointerHook(rpl, hook, *outputHookList))
                     return false;
 
                 break;
             }
 
             case tk::DataMagic::PatchHook: {
-                if (!readPatchHook(hook, hookList))
+                if (!readPatchHook(hook, *outputHookList))
                     return false;
 
                 break;

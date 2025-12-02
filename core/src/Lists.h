@@ -82,7 +82,7 @@ namespace tk {
             if (mVector.count() <= 1)
                 return true;
             
-            sort();
+            this->sort();
             
             for (s32 i = 1; i < mVector.count(); i++) {
                 if (mVector.data()[i].startAddr < mVector.data()[i - 1].endAddr) {
