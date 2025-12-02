@@ -177,7 +177,7 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, funcPtr callCtors) {
                     standardEncountered, coremodEncountered
                 )) {
                     success = false;
-                    LOG("RPL %s failed to load, aborting inject!");
+                    LOG("RPL failed to load, aborting inject!");
                     break;
                 }
                 
