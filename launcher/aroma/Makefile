@@ -38,7 +38,7 @@ CXXFLAGS	:= $(CFLAGS) -std=gnu++20
 ASFLAGS	:=	$(ARCH)
 LDFLAGS	=	$(ARCH) $(RPXSPECS) -Wl,-Map,$(notdir $*.map) -T$(WUMS_ROOT)/share/libkernel.ld $(WUPSSPECS) 
 
-LIBS	:= -lkernel -lwups -lwut -lfunctionpatcher
+LIBS	:= -lkernel -lwups -lwut -lfunctionpatcher -lcontentredirection
 
 #-------------------------------------------------------------------------------
 # list of directories containing libraries, this must be the top level

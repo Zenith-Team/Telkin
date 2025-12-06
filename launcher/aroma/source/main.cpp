@@ -1,16 +1,18 @@
+#include <string.h>
+#include <format>
+
 #include <wups.h>
 #include <whb/log.h>
 #include <whb/log_module.h>
 #include <whb/log_cafe.h>
 #include <whb/log_udp.h>
 #include <function_patcher/function_patching.h>
-#include <string.h>
+#include <content_redirection/redirection.h>
 
 #include <coreinit/cache.h>
 #include <coreinit/title.h>
 
 #include <patcher/rplinfo.h>
-#include <patcher/patcher.h>
 
 WUPS_PLUGIN_NAME("Telkin RPL Loader");
 WUPS_PLUGIN_DESCRIPTION("<to be written>");
@@ -18,21 +20,25 @@ WUPS_PLUGIN_VERSION("prerelease");
 WUPS_PLUGIN_AUTHOR("techmuse, Luminyx");
 WUPS_PLUGIN_LICENSE("MPL-2.0");
 
+WUPS_USE_WUT_DEVOPTAB();
+
 #define NSMBU_US_TID 0x0005000010101D00llu // TEMP
-int Initialized = 0;
-uint32_t TelkinRPLHandle;
+static int Initialized = 0;
+static uint32_t TelkinRPLHandle;
+static CRLayerHandle contentLayerHandle;
 
-PatchedFunctionHandle patchHandle;
+static PatchedFunctionHandle patchHandle;
 
-void TelkinBootstrap() 
-{
+void TelkinBootstrap() {
     WHBLogPrintf("In the Telkin bootstrap!\n");
     if (Initialized)
         return;
 
     typedef void (*TelkinInitFuncHandle_t)(void *acquireAddr, void *exportAddr);
     TelkinInitFuncHandle_t TelkinInitFuncHandle;
-    OSDynLoad_Error err = OSDynLoad_Acquire("~/Telkin.rpl", (OSDynLoad_Module*)&TelkinRPLHandle); // load RPL from SD card
+    // The RPL doesn't load properly on console yet so this is out for now
+
+    /* OSDynLoad_Error err = OSDynLoad_Acquire("~/Telkin.rpl", (OSDynLoad_Module*)&TelkinRPLHandle); // load RPL from SD card
     if (err != OS_DYNLOAD_OK) {
         WHBLogPrintf("Couldn't load Telkin.rpl! Err: %08X\n", err);
     }
@@ -40,6 +46,7 @@ void TelkinBootstrap()
     OSDynLoad_FindExport((OSDynLoad_Module*)&TelkinRPLHandle, OS_DYNLOAD_EXPORT_FUNC, "init", (void**)TelkinInitFuncHandle);
 
     TelkinInitFuncHandle((void*)&OSDynLoad_Acquire, (void*)&OSDynLoad_FindExport);
+    */
     return;
 }
 
@@ -51,11 +58,35 @@ DECL_FUNCTION(void, call_ctors) {
     return;
 }
 
+void RedirectContentDir() {
+    std::string titleIDString = std::format("{:016X}", OSGetTitleID());
+    std::string layerName = "Telklin FS Redirection";
+    // TODO: Add DLC redirection support (and possibly saves as well?)
+    std::string redirPath = std::format("/vol/external01/telkin/{}/content/", titleIDString);
+
+    auto ret = ContentRedirection_AddFSLayerEx(&contentLayerHandle, 
+        layerName.c_str(),
+        "/vol/content/",
+        redirPath.c_str(), 
+        FS_LAYER_TYPE_EX_MERGE_DIRECTORY);
+
+    if (ret != CONTENT_REDIRECTION_RESULT_SUCCESS) {
+        WHBLogPrintf("Failed to redirect the content dir to %s!\n", redirPath.c_str());
+    }
+}
+
 INITIALIZE_PLUGIN() {
     WHBLogPrintf("Patch functions");
     if (FunctionPatcher_InitLibrary() != FUNCTION_PATCHER_RESULT_SUCCESS) {
         OSFatal("Telkin RPL Loader: FunctionPatcher_InitLibrary failed");
     }
+
+    ContentRedirectionStatus error;
+    if ((error = ContentRedirection_InitLibrary()) != CONTENT_REDIRECTION_RESULT_SUCCESS) {
+        WHBLogPrintf("Failed to init ContentRedirection. Error %s %d", ContentRedirection_GetStatusStr(error), error);
+        OSFatal("Failed to init ContentRedirection.");
+    }
+
 }
 
 DEINITIALIZE_PLUGIN() {
@@ -63,7 +94,6 @@ DEINITIALIZE_PLUGIN() {
 }
 
 ON_APPLICATION_START() {
-    
     if (OSGetTitleID() != NSMBU_US_TID) {
         return;
     }
@@ -113,6 +143,16 @@ ON_APPLICATION_START() {
 
     if (FunctionPatcher_AddFunctionPatch(&repl, &patchHandle, nullptr) != FUNCTION_PATCHER_RESULT_SUCCESS) {
         WHBLogPrintf("Failed to add \"call_ctors\" patch\n");
+    }
+
+    RedirectContentDir();
+
+}
+
+ON_APPLICATION_ENDS() {
+    if (contentLayerHandle != 0) {
+        ContentRedirection_RemoveFSLayer(contentLayerHandle);
+        contentLayerHandle = 0;
     }
 
 }
