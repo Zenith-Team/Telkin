@@ -1,4 +1,4 @@
-name: Build
+name: Build (Wii U)
 
 on: [push, pull_request, workflow_dispatch]
 
