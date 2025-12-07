@@ -19,7 +19,7 @@ WUMS_ROOT := $(DEVKITPRO)/wums
 # DATA is a list of directories containing data files
 # INCLUDES is a list of directories containing header files
 #-------------------------------------------------------------------------------
-TARGET		:=	$(notdir $(CURDIR))
+TARGET		:=	Telkin-loader
 BUILD		:=	build
 SOURCES		:=	source source/patcher
 DATA		:=	data
@@ -28,7 +28,7 @@ INCLUDES	:=	source
 #-------------------------------------------------------------------------------
 # options for code generation
 #-------------------------------------------------------------------------------
-CFLAGS	:=	-Wall -O0 -ffunction-sections -g \
+CFLAGS	:=	-Wall -O2 -ffunction-sections \
 			$(MACHDEP)
 
 CFLAGS	+=	$(INCLUDE) -D__WIIU__ -D__WUT__ -D__WUPS__ 
@@ -38,7 +38,7 @@ CXXFLAGS	:= $(CFLAGS) -std=gnu++20
 ASFLAGS	:=	$(ARCH)
 LDFLAGS	=	$(ARCH) $(RPXSPECS) -Wl,-Map,$(notdir $*.map) -T$(WUMS_ROOT)/share/libkernel.ld $(WUPSSPECS) 
 
-LIBS	:= -lkernel -lwups -lwut -lfunctionpatcher -lcontentredirection
+LIBS	:= -lwups -lwut -lfunctionpatcher -lcontentredirection
 
 #-------------------------------------------------------------------------------
 # list of directories containing libraries, this must be the top level
