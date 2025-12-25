@@ -349,14 +349,14 @@ bool loadRPL(
     err = OSDynLoad_FindExport(rpl, 1, "__loaderdata_start", &hooksBegin);
     if (err != 0 || hooksBegin == nullptr) {
         LOG("Could not find data loaderdata_start, err = 0x%08X, ptr = 0x%08X", err, reinterpret_cast<u32>(hooksBegin));
-        return false;
+        LOG("Assuming no hooks.");
+        return true;
     }
     
     GenericHook* hooksEnd = nullptr;
     err = OSDynLoad_FindExport(rpl, 1, "__loaderdata_end", &hooksEnd);
     if (err != 0 || hooksEnd == nullptr) {
         LOG("Could not find data loaderdata_end, err = 0x%08X, ptr = 0x%08X", err, reinterpret_cast<u32>(hooksEnd));
-        return false;
     }
     
     LOG("DEBUG: DATA Hooks begin at 0x%08X, end at 0x%08X", reinterpret_cast<u32>(hooksBegin), reinterpret_cast<u32>(hooksEnd));
