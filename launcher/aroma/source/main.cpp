@@ -60,7 +60,7 @@ DECL_FUNCTION(void, call_ctors) {
 
 void RedirectContentDir() {
     std::string titleIDString = std::format("{:016X}", OSGetTitleID());
-    std::string layerName = "Telklin FS Redirection";
+    std::string layerName = "Telkin FS Redirection";
     // TODO: Add DLC redirection support (and possibly saves as well?)
     std::string redirPath = std::format("/vol/external01/telkin/{}/content/", titleIDString);
 
