@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <telkin/Telkin.h>
 
 #include <dynamic_libs/os_functions.h>
@@ -20,9 +21,10 @@
 #include <dynamic_libs/vpad_functions.h>
 #include <dynamic_libs/zlib_functions.h>
 
-#include "Debug.h"
-#include "Lists.h"
+#include "PrivateInterface.h"
+#include "HookApplicators.h"
 
+#include <semver.hpp>
 
 /*
    ______    ____    _
@@ -40,13 +42,18 @@
 namespace tk {
     bool loadRPL(
         const char* rplName,
-        tk::HookList& hookList, tk::FunctionList& startFuncs,
+        std::vector<HookEntry>& hookList, std::vector<tk::startfunc_t>& startFuncs,
         u32 gameTitleID,
-        bool& coreapiEncountered, HookList& coreapiHooks, startfunc_t& coreapiStartFunc,
-        bool& standardEncountered, bool& coremodEncountered
+        bool& coreapiEncountered, std::vector<HookEntry>& coreapiHooks, startfunc_t& coreapiStartFunc,
+        bool& standardEncountered, bool& coremodEncountered,
+        std::vector<HookEntry>& allHooks
     );
     
-    char logMsg[tk::cLogBufferSize];
+    bool applyHooks(const std::vector<HookEntry>& hooks);
+    
+    void callFuncs(const std::vector<tk::startfunc_t>& startFuncs, u32 acquireAddr, u32 exportAddr);
+
+    bool validateHooks(std::vector<HookEntry>& hooks);
 }
 
 extern "C" {
@@ -55,6 +62,8 @@ extern "C" {
     
     void __rpl_crt() { } // Called by Cafe OS on acquire, don't do anything here
 }
+
+extern "C" void MAGIC_CALLBACK(); // just an easy breakpoint site
 
 extern "C" void init(u32 acquireAddr, u32 exportAddr, funcPtr callCtors) {
     static bool initialized = false;
@@ -89,57 +98,57 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, funcPtr callCtors) {
     InitVPadFunctionPointers();
     InitZlibFunctionPointers();
     
-    LOG("Telkin v0.1 by Zenith");
+    OSReport("Telkin v0.1 by Zenith\n");
 
     FSInit();
-    LOG("FS Inited");
+    OSReport("FS Inited\n");
 
     FSClient* client = (FSClient*)MEMAllocFromDefaultHeap(sizeof(FSClient));
     if (client == nullptr) {
-        LOG("Error: Unable to allocate FSClient");
+        OSReport("Error: Unable to allocate FSClient\n");
         return;
     }
-    LOG("FSClient allocated");
+    OSReport("FSClient allocated\n");
 
     FSCmdBlock* cmd = (FSCmdBlock*)MEMAllocFromDefaultHeap(sizeof(FSCmdBlock));
     if (cmd == nullptr) {
-        LOG("Error: Unable to allocate FSCmdBlock");
+        OSReport("Error: Unable to allocate FSCmdBlock\n");
         MEMFreeToDefaultHeap(client);
         return;
     }
-    LOG("FSCmdBlock allocated");
+    OSReport("FSCmdBlock allocated\n");
 
     constexpr int cBufferSize = 0x10000; // I hope rpl.txt won't exceed 10kb ;P
     u8* buffer = (u8*)MEMAllocFromDefaultHeapEx(cBufferSize, FS_IO_BUFFER_ALIGN);
     if (buffer == nullptr) {
-        LOG("Error: Unable to allocate buffer");
+        OSReport("Error: Unable to allocate buffer\n");
         MEMFreeToDefaultHeap(client);
         MEMFreeToDefaultHeap(cmd);
         return;
     }
-    LOG("Allocated buffer");
+    OSReport("Allocated buffer\n");
 
     OSBlockSet(buffer, 0, cBufferSize);
-    LOG("OSBlockSet OK");
+    OSReport("OSBlockSet OK\n");
 
     FSAddClient(client, FS_RET_NO_ERROR);
-    LOG("FSAddClient OK");
+    OSReport("FSAddClient OK\n");
     FSInitCmdBlock(cmd);
-    LOG("FSInitCmd OK");
+    OSReport("FSInitCmd OK\n");
 
     char path[FS_MAX_ARGPATH_SIZE];
     //strncpy(path, "/vol/content/rpl.txt", FS_MAX_ARGPATH_SIZE);
     __os_snprintf(path, sizeof(path), "/vol/content/rpl.txt");
-    LOG("strncpy phobia overcame");
+    OSReport("strncpy phobia overcame\n");
 
     FSFileHandle handle;
     FSOpenFile(client, cmd, path, "r", &handle, FS_RET_NO_ERROR);
-    LOG("FSOpenFile OK");
+    OSReport("FSOpenFile OK\n");
     FSReadFile(client, cmd, buffer, 1, cBufferSize, handle, 0, FS_RET_NO_ERROR);
-    LOG("FSReadFile OK");
+    OSReport("FSReadFile OK\n");
 
     if (*buffer == 0) {
-        LOG("Error: rpl.txt is empty or non-existent.");
+        OSReport("Error: rpl.txt is empty or non-existent.\n");
 
         FSCloseFile(client, cmd, handle, FS_RET_NO_ERROR);
         MEMFreeToDefaultHeap(client);
@@ -148,15 +157,17 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, funcPtr callCtors) {
 
         return;
     } else {
-        LOG("rpl.txt was read");
+        OSReport("rpl.txt was read\n");
     }
     
-    { // Scoped to deallocate the memory used by HookList and FunctionList
-        tk::HookList hooks;
-        tk::FunctionList startFuncs;
+    { // Scoped to deallocate the memory    
+        std::vector<tk::HookEntry> stdHooks;
+        std::vector<tk::HookEntry> coreapiHooks;
+        std::vector<tk::HookEntry> allHooks;
+        std::vector<tk::startfunc_t> stdStartFuncs;
+        tk::startfunc_t coreapiStartFunc = nullptr;
+        // TODO: Cross-list validation between hooks and coreapi hooks overlaps (yikes!) probably use 3 lists one just for validation
         
-        tk::HookList coreapiHooks;
-        tk::startfunc_t coreapiStartFunc;
         
         bool success = true;
         bool coreapiEncountered = false;
@@ -171,62 +182,67 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, funcPtr callCtors) {
                 
                 if (!tk::loadRPL(
                     line, 
-                    hooks, startFuncs, 
+                    stdHooks, stdStartFuncs, 
                     gameTitleID, 
                     coreapiEncountered, coreapiHooks, coreapiStartFunc,
-                    standardEncountered, coremodEncountered
+                    standardEncountered, coremodEncountered,
+                    allHooks
                 )) {
                     success = false;
-                    LOG("RPL failed to load, aborting inject!");
+                    OSReport("RPL failed to load, aborting inject!\n");
                     break;
                 }
                 
-                LOG("Finished loading RPL: %s", line);
+                OSReport("Finished loading RPL: %s\n", line);
 
                 line = (char*)(buffer + i + 1);
             }
         }
         
         if (standardEncountered == true && coreapiEncountered == false) {
-            LOG("Attempted to load mods without a CoreAPI. Fix your dependencies. Aborting inject!");
+            OSReport("Attempted to load mods without a CoreAPI. Fix your dependencies. Aborting inject!\n");
             success = false;
         }
 
         if (coreapiEncountered && coremodEncountered) {
-            LOG("Cannot load Core Mods when a CoreAPI is available. Please update your mod or remove the CoreAPI.");
+            OSReport("Cannot load Core Mods when a CoreAPI is available. Please update your mod or remove the CoreAPI.\n");
             success = false;
         }
         
-        if (!success || !hooks.validateRanges()) {
+        if (!success || !tk::validateHooks(allHooks)) {
             FSCloseFile(client, cmd, handle, FS_RET_NO_ERROR);
             MEMFreeToDefaultHeap(client);
             MEMFreeToDefaultHeap(cmd);
             MEMFreeToDefaultHeap(buffer);
             
+            OSReport("Something went wrong. You can ask for help in our Discord server: https://go.nsmbu.net/discord or email: contact@nsmbu.net\n");
+            
             return; // no changes to game
         }
         
         // here's the magic:
-        coreapiHooks.applyAll();
-        hooks.applyAll();
+        MAGIC_CALLBACK();
+        tk::applyHooks(coreapiHooks);
+        tk::applyHooks(stdHooks);
         coreapiStartFunc(
             OS_SPECIFICS->addr_OSDynLoad_Acquire,
             OS_SPECIFICS->addr_OSDynLoad_FindExport
         );
-        startFuncs.callAll(
+        tk::callFuncs(
+            stdStartFuncs,
             OS_SPECIFICS->addr_OSDynLoad_Acquire,
             OS_SPECIFICS->addr_OSDynLoad_FindExport
         );
     }
     
     FSCloseFile(client, cmd, handle, FS_RET_NO_ERROR);
-    LOG("FSCloseFile OK");
+    OSReport("FSCloseFile OK\n");
     MEMFreeToDefaultHeap(client);
     MEMFreeToDefaultHeap(cmd);
     MEMFreeToDefaultHeap(buffer);
-    LOG("MEMFrees OK");
+    OSReport("MEMFrees OK\n");
 
-    LOG("Telkin is finished loading mods. Enjoy the game!");
+    OSReport("Telkin is finished loading mods. Enjoy the game!\n");
     
     return;
 }
@@ -235,56 +251,57 @@ namespace tk {
 
 bool loadRPL(
     const char* rplName,
-    HookList& hookList, FunctionList& startFuncs,
+    std::vector<HookEntry>& hookList, std::vector<tk::startfunc_t>& startFuncs,
     u32 gameTitleID,
-    bool& coreapiEncountered, HookList& coreapiHooks, startfunc_t& coreapiStartFunc,
-    bool& standardEncountered, bool& coremodEncountered
+    bool& coreapiEncountered, std::vector<HookEntry>& coreapiHooks, startfunc_t& coreapiStartFunc,
+    bool& standardEncountered, bool& coremodEncountered,
+    std::vector<HookEntry>& allHooks
 ) {
     // Acquire RPL
     u32 rpl = 0;
     if (OSDynLoad_Acquire(rplName, &rpl) != 0) {
-        LOG("Unable to acquire RPL: %s", rplName);
+        OSReport("Unable to acquire RPL: %s\n", rplName);
         return false;
     }
     
     getTitleID_t getTitleID = nullptr;
     s32 err = OSDynLoad_FindExport(rpl, 0, "getTitleID", &getTitleID);
     if (err != 0 || getTitleID == nullptr) {
-        LOG("Could not find getTitleID, err = 0x%08X, ptr = 0x%08X", err, reinterpret_cast<u32>(getTitleID));
+        OSReport("Could not find getTitleID, err = 0x%08X, ptr = 0x%08X\n", err, reinterpret_cast<u32>(getTitleID));
         return false;
     }
 
     u32 rplTitleIDTarget = static_cast<u32>(getTitleID());
     if (gameTitleID != rplTitleIDTarget) {
-        LOG("RPL %s title ID mismatch, OS: %08X, RPL: %08X", rplName, gameTitleID, rplTitleIDTarget);
+        OSReport("RPL %s title ID mismatch, OS: %08X, RPL: %08X\n", rplName, gameTitleID, rplTitleIDTarget);
         return false;
     }
     
     getModID_t getModID = nullptr;
     err = OSDynLoad_FindExport(rpl, 0, "getModID", &getModID);
     if (err != 0 || getModID == nullptr) {
-        LOG("Could not find getModID, err = 0x%08X, ptr = 0x%08X", err, reinterpret_cast<u32>(getModID));
+        OSReport("Could not find getModID, err = 0x%08X, ptr = 0x%08X\n", err, reinterpret_cast<u32>(getModID));
         return false;
     }
     
     const char* const modID = getModID();
-    LOG("Mod ID: %s", modID);
+    OSReport("Mod ID: %s", modID);
     
     // Check type
     getModuleType_t getModuleType = nullptr;
     err = OSDynLoad_FindExport(rpl, 0, "getModuleType", &getModuleType);
     if (err != 0 || getModID == nullptr) {
-        LOG("Count not find getModuleType, err = 0x%08X, ptr = 0x%08X", err, reinterpret_cast<u32>(getModuleType));
+        OSReport("Count not find getModuleType, err = 0x%08X, ptr = 0x%08X\n", err, reinterpret_cast<u32>(getModuleType));
         return false;
     }
     
-    HookList* outputHookList = &hookList;
+    std::vector<HookEntry>* outputHookList = &hookList;
     
     ModuleType moduleType = getModuleType();
     switch (moduleType) {
         case tk::ModuleType::CoreAPI: {
             if (coreapiEncountered) {
-                LOG("Cannot load multiple CoreAPI modules simultaneously!");
+                OSReport("Cannot load multiple CoreAPI modules simultaneously!\n");
                 return false;
             }
             
@@ -295,7 +312,7 @@ bool loadRPL(
             tk::startfunc_t start = nullptr;
             err = OSDynLoad_FindExport(rpl, 0, "__rpl_start", &start);
             if (err != 0 || start == nullptr) {
-                LOG("Could not find __rpl_start, err = 0x%08X, ptr = 0x%08X", err, reinterpret_cast<u32>(start));
+                OSReport("Could not find __rpl_start, err = 0x%08X, ptr = 0x%08X\n", err, reinterpret_cast<u32>(start));
                 return false;
             }
             coreapiStartFunc = start;
@@ -305,7 +322,7 @@ bool loadRPL(
         
         case tk::ModuleType::CoreMod: {
             if (coreapiEncountered) {
-                LOG("Cannot load Core Mods when a CoreAPI is available. Please update your mod or remove the CoreAPI.");
+                OSReport("Cannot load Core Mods when a CoreAPI is available. Please update your mod or remove the CoreAPI.\n");
                 return false;
             }
             
@@ -315,10 +332,10 @@ bool loadRPL(
             tk::startfunc_t start = nullptr;
             err = OSDynLoad_FindExport(rpl, 0, "__rpl_start", &start);
             if (err != 0 || start == nullptr) {
-                LOG("Could not find __rpl_start, err = 0x%08X, ptr = 0x%08X", err, reinterpret_cast<u32>(start));
+                OSReport("Could not find __rpl_start, err = 0x%08X, ptr = 0x%08X\n", err, reinterpret_cast<u32>(start));
                 return false;
             }
-            startFuncs.add(start);
+            startFuncs.emplace_back(start);
             
             break;
         };
@@ -328,10 +345,10 @@ bool loadRPL(
             tk::startfunc_t start = nullptr;
             err = OSDynLoad_FindExport(rpl, 0, "__rpl_start", &start);
             if (err != 0 || start == nullptr) {
-                LOG("Could not find __rpl_start, err = 0x%08X, ptr = 0x%08X", err, reinterpret_cast<u32>(start));
+                OSReport("Could not find __rpl_start, err = 0x%08X, ptr = 0x%08X\n", err, reinterpret_cast<u32>(start));
                 return false;
             }
-            startFuncs.add(start);
+            startFuncs.emplace_back(start);
             
             standardEncountered = true;
             
@@ -339,7 +356,7 @@ bool loadRPL(
         }
         
         case tk::ModuleType::Special: {
-            LOG("WARNING: Why are you using ModuleType Special? It does nothing for you.");
+            OSReport("WARNING: Why are you using ModuleType Special? It does nothing for you.\n");
             break;
         }
     }
@@ -348,20 +365,20 @@ bool loadRPL(
     GenericHook* hooksBegin = nullptr;
     err = OSDynLoad_FindExport(rpl, 1, "__loaderdata_start", &hooksBegin);
     if (err != 0 || hooksBegin == nullptr) {
-        LOG("Could not find data loaderdata_start, err = 0x%08X, ptr = 0x%08X", err, reinterpret_cast<u32>(hooksBegin));
-        LOG("Assuming no hooks.");
+        OSReport("Could not find data loaderdata_start, err = 0x%08X, ptr = 0x%08X\n", err, reinterpret_cast<u32>(hooksBegin));
+        OSReport("Assuming no hooks.");
         return true;
     }
     
     GenericHook* hooksEnd = nullptr;
     err = OSDynLoad_FindExport(rpl, 1, "__loaderdata_end", &hooksEnd);
     if (err != 0 || hooksEnd == nullptr) {
-        LOG("Could not find data loaderdata_end, err = 0x%08X, ptr = 0x%08X", err, reinterpret_cast<u32>(hooksEnd));
+        OSReport("Could not find data loaderdata_end, err = 0x%08X, ptr = 0x%08X\n", err, reinterpret_cast<u32>(hooksEnd));
     }
     
-    LOG("DEBUG: DATA Hooks begin at 0x%08X, end at 0x%08X", reinterpret_cast<u32>(hooksBegin), reinterpret_cast<u32>(hooksEnd));
+    OSReport("DEBUG: DATA Hooks begin at 0x%08X, end at 0x%08X\n", reinterpret_cast<u32>(hooksBegin), reinterpret_cast<u32>(hooksEnd));
     if (hooksBegin == nullptr || hooksEnd == nullptr || hooksBegin >= hooksEnd) {
-        LOG("Hooks are bad");
+        OSReport("Hooks are bad");
         return false;
     }
 
@@ -371,28 +388,28 @@ bool loadRPL(
     for (GenericHook* hook = hooksBegin; hook != hooksEnd; hook++) {
         switch (hook->magic) {
             case tk::DataMagic::BranchHook: {
-                if (!readBranchHook(rpl, hook, *outputHookList))
+                if (!tk::readBranchHook(rpl, hook, *outputHookList))
                     return false;
 
                 break;
             }
 
             case tk::DataMagic::PointerHook: {
-                if (!readPointerHook(rpl, hook, *outputHookList))
+                if (!tk::readPointerHook(rpl, hook, *outputHookList))
                     return false;
 
                 break;
             }
 
             case tk::DataMagic::PatchHook: {
-                if (!readPatchHook(hook, *outputHookList))
+                if (!tk::readPatchHook(hook, *outputHookList))
                     return false;
 
                 break;
             }
             
             default: {
-                LOG("Unknown magic (0x%08X) encountered after %u hooks", hook->magic, hookCount);
+                OSReport("Unknown magic (0x%08X) encountered after %u hooks\n", hook->magic, hookCount);
                 return false;
             }
         }
@@ -400,9 +417,66 @@ bool loadRPL(
         hookCount++;
     }
 
-    LOG("Read %u hooks from this RPL: ", hookCount);
+    OSReport("Finished reading %u hooks from this RPL: %s\n", hookCount, rplName);
     
     return true;
+}
+
+bool applyHooks(const std::vector<HookEntry>& hooks) {
+    for (const HookEntry& entry : hooks) {
+        const GenericHook* hook = entry.hook;
+        
+        switch (hook->magic) {
+            case tk::DataMagic::BranchHook: {
+                if (!tk::applyBranchHook(reinterpret_cast<const tk::BranchHook*>(hook)))
+                    return false;
+                
+                break;
+            }
+            
+            case tk::DataMagic::PatchHook: {
+                if (!tk::applyPatchHook(reinterpret_cast<const tk::PatchHook*>(hook)))
+                    return false;
+                
+                break;
+            }
+            
+            case tk::DataMagic::PointerHook: {
+                if (!tk::applyPointerHook(reinterpret_cast<const tk::PointerHook*>(hook)))
+                    return false;
+                
+                break;
+            }
+        }
+    }
+    
+    return true;
+}
+
+bool validateHooks(std::vector<HookEntry>& hooks) {
+    if (hooks.size() <= 1)
+        return true;
+    
+    std::sort(hooks.begin(), hooks.end(), [](const HookEntry& lhs, const HookEntry& rhs) {
+        return lhs.startAddr < rhs.startAddr;
+    });
+    
+    for (s32 i = 1; i < hooks.size(); i++) {
+        if (hooks.data()[i].startAddr < hooks.data()[i - 1].endAddr) {
+            // TODO: Better diagnostic here with mod blame and addrs/types
+            OSReport("MOD INCOMPATIBILITY: Overlapping hooks found!\n");
+            return false;
+        }
+    }
+    
+    OSReport("No hook conflicts found :)\n");
+    return true;
+}
+
+void callFuncs(const std::vector<tk::startfunc_t>& startFuncs, u32 acquireAddr, u32 exportAddr) {
+    for (const tk::startfunc_t func : startFuncs) {
+        func(acquireAddr, exportAddr);
+    }
 }
 
 } // namespace tk

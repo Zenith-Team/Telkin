@@ -12,6 +12,8 @@
 
         "libs/DynamicLibs/dynamic_libs/include",
         "libs/DynamicLibs/cafe_sdk/include",
+        
+        "libs/semver/include",
     ],
 
     SourceDirs: [

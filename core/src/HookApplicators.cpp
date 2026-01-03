@@ -1,7 +1,11 @@
 #include "HookApplicators.h"
+#include "PrivateInterface.h"
 
-#include "Debug.h"
-#include "Lists.h"
+#include <dynamic_libs/os_functions.h>
+
+extern "C" void MAGIC_CALLBACK() {
+    // defined externally for no-inline
+}
 
 bool tk::applyBranchHook(const tk::BranchHook* hook) {
     const u32 addr = reinterpret_cast<u32>(hook->source);
@@ -10,7 +14,7 @@ bool tk::applyBranchHook(const tk::BranchHook* hook) {
 
     switch (hook->type) {
         default: {
-            LOG("Invalid hook type for hook at: 0x%08X", addr);
+            OSReport("Invalid hook type for hook at: 0x%08X\n", addr);
             return false;
         }
 
@@ -25,7 +29,7 @@ bool tk::applyBranchHook(const tk::BranchHook* hook) {
         }
     }
 
-    LOG("Writing branch hook: 0x%08X to 0x%08X", instr, addr);
+    OSReport("Writing branch hook: 0x%08X to 0x%08X\n", instr, addr);
     *hook->source = instr;
 
     DCFlushRange(hook->source, sizeof(instr));
@@ -38,7 +42,7 @@ bool tk::applyBranchHook(const tk::BranchHook* hook) {
 bool tk::applyPointerHook(const tk::PointerHook* hook) {
     const u32 addr = reinterpret_cast<u32>(hook->source);
 
-    LOG("Writing pointer hook: 0x%08X to 0x%08X", addr, hook->target);
+    OSReport("Writing pointer hook: 0x%08X to 0x%08X\n", addr, hook->target);
 
     *hook->source = reinterpret_cast<u32>(hook->target);
 
@@ -51,11 +55,11 @@ bool tk::applyPatchHook(const tk::PatchHook* patch) {
     const u32 addr = reinterpret_cast<u32>(patch->addr);
     const u32 totalSize = patch->count * (patch->dataSize / 8);
 
-    LOG("Applying patch at 0x%08X", addr);
+    OSReport("Applying patch at 0x%08X\n", addr);
 
     switch (patch->dataSize) {
         default: {
-            LOG("Invalid patch unit size %u at addr 0x%08X", patch->dataSize, addr);
+            OSReport("Invalid patch unit size %u at addr 0x%08X\n", patch->dataSize, addr);
             return false;
         }
 
@@ -88,50 +92,50 @@ bool tk::applyPatchHook(const tk::PatchHook* patch) {
     return true;
 }
 
-bool tk::readBranchHook(u32 rpl, void* hookPtr, HookList& list) {
+bool tk::readBranchHook(u32 rpl, void* hookPtr, std::vector<HookEntry>& list) {
     tk::BranchHook* hook = reinterpret_cast<tk::BranchHook*>(hookPtr);
     const u32 addr = reinterpret_cast<u32>(hook->source);
 
     u32 target = 0;
     s32 err = OSDynLoad_FindExport(rpl, false, hook->target, &target);
     if (err != 0 || target == 0 || target == 0xFFFFFFFF) {
-        LOG("Could not find branch hook target: %s for patch at: 0x%08X", hook->target, addr);
+        OSReport("Could not find branch hook target: %s for patch at: 0x%08X\n", hook->target, addr);
         return false;
     }
 
     hook->target = reinterpret_cast<const char*>(target); //* We are resolving this string early while we still have access to the RPL and reusing the pointer field for the final address
     
-    list.add(hook, addr, addr + sizeof(u32));
+    list.emplace_back((GenericHook*)hook, addr, addr + sizeof(u32));
 
     return true;
 }
 
-bool tk::readPointerHook(u32 rpl, void* hookPtr, HookList& list) {
+bool tk::readPointerHook(u32 rpl, void* hookPtr, std::vector<HookEntry>& list) {
     tk::PointerHook* hook = reinterpret_cast<tk::PointerHook*>(hookPtr);
     const u32 addr = reinterpret_cast<u32>(hook->source);
 
     u32 target = 0;
     s32 err = OSDynLoad_FindExport(rpl, hook->isData, hook->target, &target);
     if (err != 0 || target == 0 || target == 0xFFFFFFFF) {
-        LOG("Could not find pointer hook target: %s for patch at: 0x%08X", hook->target, addr);
+        OSReport("Could not find pointer hook target: %s for patch at: 0x%08X\n", hook->target, addr);
         return false;
     }
 
     hook->target = reinterpret_cast<const char*>(target); //* We are resolving this string early while we still have access to the RPL and reusing the pointer field for the final address
 
-    list.add(hook, addr, addr + sizeof(void*));
+    list.emplace_back((GenericHook*)hook, addr, addr + sizeof(void*));
 
     return true;
 }
 
-bool tk::readPatchHook(void* hookPtr, HookList& list) {
+bool tk::readPatchHook(void* hookPtr, std::vector<HookEntry>& list) {
     const tk::PatchHook* patch = reinterpret_cast<tk::PatchHook*>(hookPtr);
     const u32 addr = reinterpret_cast<u32>(patch->addr);
     const u32 totalSize = patch->count * (patch->dataSize / 8);
 
     switch (patch->dataSize) {
         default: {
-            LOG("Invalid patch unit size %u at addr 0x%08X", patch->dataSize, addr);
+            OSReport("Invalid patch unit size %u at addr 0x%08X\n", patch->dataSize, addr);
             return false;
         }
 
@@ -141,7 +145,7 @@ bool tk::readPatchHook(void* hookPtr, HookList& list) {
             break;
     }
     
-    list.add(patch, addr, addr + totalSize);
+    list.emplace_back((GenericHook*)patch, addr, addr + totalSize);
 
     return true;
 }

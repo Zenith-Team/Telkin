@@ -1,3 +1,6 @@
 [submodule "core/libs/DynamicLibs"]
 	path = core/libs/DynamicLibs
 	url = https://github.com/Zenith-Team/DynamicLibs.git
+[submodule "core/libs/semver"]
+	path = core/libs/semver
+	url = https://github.com/Neargye/semver
