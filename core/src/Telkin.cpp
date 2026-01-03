@@ -285,14 +285,46 @@ bool loadRPL(
     }
     
     const char* const modID = getModID();
-    OSReport("Mod ID: %s", modID);
+    OSReport("Mod ID: %s\n", modID);
     
     // Check type
     getModuleType_t getModuleType = nullptr;
     err = OSDynLoad_FindExport(rpl, 0, "getModuleType", &getModuleType);
     if (err != 0 || getModID == nullptr) {
-        OSReport("Count not find getModuleType, err = 0x%08X, ptr = 0x%08X\n", err, reinterpret_cast<u32>(getModuleType));
+        OSReport("Could not find getModuleType, err = 0x%08X, ptr = 0x%08X\n", err, reinterpret_cast<u32>(getModuleType));
         return false;
+    }
+    
+    // Read dependencies
+    getDependencyManifest_t getDependencyManifest = nullptr;
+    err = OSDynLoad_FindExport(rpl, 0, "getDependencyManifest", &getDependencyManifest);
+    if (err != 0 || getDependencyManifest == nullptr) {
+        OSReport("Could not find getDependencyManifest, err = 0x%08X, ptr = 0x%08X\n", err, reinterpret_cast<u32>(getDependencyManifest));
+        return false;
+    }
+    
+    const u8* dependencyManifest = getDependencyManifest();
+    
+    u32 dependencyCount = *(u32*)dependencyManifest;
+    dependencyManifest += sizeof(u32);
+    OSReport("Found %u dependencies\n", dependencyCount);
+    for (u32 i = 0; i < dependencyCount; i++) {
+        u32 nameLen = 0;
+        for (const u8* c = dependencyManifest; *c != 0x00; c++) {
+            nameLen++;
+        }
+        
+        const u8* name = dependencyManifest;
+        const u8* version = dependencyManifest + nameLen + 1;
+        
+        OSReport("Dependency: [%s, %s]\n", name, version);
+        
+        u32 versionLen = 0;
+        for (const u8* c = version; *c != 0x00; c++) {
+            versionLen++;
+        }
+        
+        dependencyManifest += nameLen + 1 + versionLen + 1;
     }
     
     std::vector<HookEntry>* outputHookList = &hookList;
@@ -366,7 +398,7 @@ bool loadRPL(
     err = OSDynLoad_FindExport(rpl, 1, "__loaderdata_start", &hooksBegin);
     if (err != 0 || hooksBegin == nullptr) {
         OSReport("Could not find data loaderdata_start, err = 0x%08X, ptr = 0x%08X\n", err, reinterpret_cast<u32>(hooksBegin));
-        OSReport("Assuming no hooks.");
+        OSReport("Assuming no hooks.\n");
         return true;
     }
     
@@ -388,21 +420,21 @@ bool loadRPL(
     for (GenericHook* hook = hooksBegin; hook != hooksEnd; hook++) {
         switch (hook->magic) {
             case tk::DataMagic::BranchHook: {
-                if (!tk::readBranchHook(rpl, hook, *outputHookList))
+                if (!tk::readBranchHook(rpl, hook, *outputHookList, allHooks))
                     return false;
 
                 break;
             }
 
             case tk::DataMagic::PointerHook: {
-                if (!tk::readPointerHook(rpl, hook, *outputHookList))
+                if (!tk::readPointerHook(rpl, hook, *outputHookList, allHooks))
                     return false;
 
                 break;
             }
 
             case tk::DataMagic::PatchHook: {
-                if (!tk::readPatchHook(hook, *outputHookList))
+                if (!tk::readPatchHook(hook, *outputHookList, allHooks))
                     return false;
 
                 break;
@@ -454,8 +486,12 @@ bool applyHooks(const std::vector<HookEntry>& hooks) {
 }
 
 bool validateHooks(std::vector<HookEntry>& hooks) {
-    if (hooks.size() <= 1)
+    OSReport("Validating hooks...\n");
+    
+    if (hooks.size() <= 1) {
+        OSReport("Only %u hooks present, assuming no conflicts.\n", hooks.size());
         return true;
+    }
     
     std::sort(hooks.begin(), hooks.end(), [](const HookEntry& lhs, const HookEntry& rhs) {
         return lhs.startAddr < rhs.startAddr;

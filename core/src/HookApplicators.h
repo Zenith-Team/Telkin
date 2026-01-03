@@ -18,8 +18,8 @@ namespace tk {
     bool applyPointerHook(const tk::PointerHook* hook);
     bool applyPatchHook(const tk::PatchHook* hook);
     
-    bool readBranchHook(u32 rpl, void* hookPtr, std::vector<HookEntry>& list);
-    bool readPointerHook(u32 rpl, void* hookPtr, std::vector<HookEntry>& list);
-    bool readPatchHook(void* hookPtr, std::vector<HookEntry>& list);
+    bool readBranchHook(u32 rpl, void* hookPtr, std::vector<HookEntry>& list, std::vector<HookEntry>& listFull);
+    bool readPointerHook(u32 rpl, void* hookPtr, std::vector<HookEntry>& list, std::vector<HookEntry>& listFull);
+    bool readPatchHook(void* hookPtr, std::vector<HookEntry>& list, std::vector<HookEntry>& listFull);
     
 } // namespace tk

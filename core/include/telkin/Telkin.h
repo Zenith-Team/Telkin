@@ -64,6 +64,7 @@ namespace tk {
     using getTitleID_t = u64 (*)();
     using getModID_t = const char* (*)();
     using getModuleType_t = ModuleType (*)();
+    using getDependencyManifest_t = const u8* (*)();
 }
 
 #define tHook(addr, target, type) \
