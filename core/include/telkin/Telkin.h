@@ -2,6 +2,7 @@
 
 #include <dynamic_libs/os_types.h>
 #include <type_traits>
+#include <span>
 
 namespace tk {
 
@@ -65,6 +66,13 @@ namespace tk {
     using getModID_t = const char* (*)();
     using getModuleType_t = ModuleType (*)();
     using getDependencyManifest_t = const u8* (*)();
+    
+    struct ModInfo {
+        const char* id;
+        const char* version;
+    };
+    
+    const std::span<ModInfo> getMods();
 }
 
 #define tHook(addr, target, type) \

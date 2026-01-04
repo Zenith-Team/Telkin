@@ -1,4 +1,3 @@
-#include <algorithm>
 #include <telkin/Telkin.h>
 
 #include <dynamic_libs/os_functions.h>
@@ -24,7 +23,11 @@
 #include "PrivateInterface.h"
 #include "HookApplicators.h"
 
-#include <semver.hpp>
+#include <semver.h>
+
+#include <vector>
+#include <algorithm>
+#include <ranges>
 
 /*
    ______    ____    _
@@ -40,20 +43,28 @@
 */
 
 namespace tk {
+    struct RequestedDependency {
+        const char* requester;
+        const char* requestedMod;
+        const char* requestedVersion;
+    };
+    
+    std::vector<tk::ModInfo> sAllMods;
+    
     bool loadRPL(
         const char* rplName,
         std::vector<HookEntry>& hookList, std::vector<tk::startfunc_t>& startFuncs,
         u32 gameTitleID,
         bool& coreapiEncountered, std::vector<HookEntry>& coreapiHooks, startfunc_t& coreapiStartFunc,
         bool& standardEncountered, bool& coremodEncountered,
-        std::vector<HookEntry>& allHooks
+        std::vector<HookEntry>& allHooks,
+        std::vector<ModInfo>& allMods, std::vector<RequestedDependency>& allDeps
     );
     
     bool applyHooks(const std::vector<HookEntry>& hooks);
-    
     void callFuncs(const std::vector<tk::startfunc_t>& startFuncs, u32 acquireAddr, u32 exportAddr);
-
     bool validateHooks(std::vector<HookEntry>& hooks);
+    bool validateDependencies(const std::vector<RequestedDependency>& deps);
 }
 
 extern "C" {
@@ -98,7 +109,8 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, funcPtr callCtors) {
     InitVPadFunctionPointers();
     InitZlibFunctionPointers();
     
-    OSReport("Telkin v0.1 by Zenith\n");
+    OSReport("Telkin v1.0.0 by Zenith\n");
+    tk::sAllMods.emplace_back("Telkin", "1.0.0");
 
     FSInit();
     OSReport("FS Inited\n");
@@ -160,80 +172,78 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, funcPtr callCtors) {
         OSReport("rpl.txt was read\n");
     }
     
-    { // Scoped to deallocate the memory    
-        std::vector<tk::HookEntry> stdHooks;
-        std::vector<tk::HookEntry> coreapiHooks;
-        std::vector<tk::HookEntry> allHooks;
-        std::vector<tk::startfunc_t> stdStartFuncs;
-        tk::startfunc_t coreapiStartFunc = nullptr;
-        // TODO: Cross-list validation between hooks and coreapi hooks overlaps (yikes!) probably use 3 lists one just for validation
-        
-        
-        bool success = true;
-        bool coreapiEncountered = false;
-        bool standardEncountered = false;
-        bool coremodEncountered = false;
-        u32 gameTitleID = static_cast<u32>(OSGetTitleID());
-        
-        char* line = (char*)buffer;
-        for (u32 i = 0; i < cBufferSize; i++) {
-            if (buffer[i] == '\n') { // TODO: Support CRLF
-                buffer[i] = '\0';
-                
-                if (!tk::loadRPL(
-                    line, 
-                    stdHooks, stdStartFuncs, 
-                    gameTitleID, 
-                    coreapiEncountered, coreapiHooks, coreapiStartFunc,
-                    standardEncountered, coremodEncountered,
-                    allHooks
-                )) {
-                    success = false;
-                    OSReport("RPL failed to load, aborting inject!\n");
-                    break;
-                }
-                
-                OSReport("Finished loading RPL: %s\n", line);
-
-                line = (char*)(buffer + i + 1);
+    std::vector<tk::HookEntry> stdHooks;
+    std::vector<tk::HookEntry> coreapiHooks;
+    std::vector<tk::HookEntry> allHooks;
+    std::vector<tk::startfunc_t> stdStartFuncs;
+    std::vector<tk::RequestedDependency> allDeps;
+    tk::startfunc_t coreapiStartFunc = nullptr;
+    
+    bool success = true;
+    bool coreapiEncountered = false;
+    bool standardEncountered = false;
+    bool coremodEncountered = false;
+    u32 gameTitleID = static_cast<u32>(OSGetTitleID());
+    
+    const char* line = (const char*)buffer;
+    for (u32 i = 0; i < cBufferSize; i++) {
+        if (buffer[i] == '\n') { // TODO: Support CRLF
+            buffer[i] = '\0';
+            
+            if (!tk::loadRPL(
+                line, 
+                stdHooks, stdStartFuncs, 
+                gameTitleID, 
+                coreapiEncountered, coreapiHooks, coreapiStartFunc,
+                standardEncountered, coremodEncountered,
+                allHooks,
+                tk::sAllMods, allDeps
+            )) {
+                success = false;
+                OSReport("RPL failed to load, aborting inject!\n");
+                break;
             }
-        }
-        
-        if (standardEncountered == true && coreapiEncountered == false) {
-            OSReport("Attempted to load mods without a CoreAPI. Fix your dependencies. Aborting inject!\n");
-            success = false;
-        }
-
-        if (coreapiEncountered && coremodEncountered) {
-            OSReport("Cannot load Core Mods when a CoreAPI is available. Please update your mod or remove the CoreAPI.\n");
-            success = false;
-        }
-        
-        if (!success || !tk::validateHooks(allHooks)) {
-            FSCloseFile(client, cmd, handle, FS_RET_NO_ERROR);
-            MEMFreeToDefaultHeap(client);
-            MEMFreeToDefaultHeap(cmd);
-            MEMFreeToDefaultHeap(buffer);
             
-            OSReport("Something went wrong. You can ask for help in our Discord server: https://go.nsmbu.net/discord or email: contact@nsmbu.net\n");
+            OSReport("Finished loading RPL: %s\n", line);
             
-            return; // no changes to game
+            line = (const char*)(buffer + i + 1);
         }
-        
-        // here's the magic:
-        MAGIC_CALLBACK();
-        tk::applyHooks(coreapiHooks);
-        tk::applyHooks(stdHooks);
-        coreapiStartFunc(
-            OS_SPECIFICS->addr_OSDynLoad_Acquire,
-            OS_SPECIFICS->addr_OSDynLoad_FindExport
-        );
-        tk::callFuncs(
-            stdStartFuncs,
-            OS_SPECIFICS->addr_OSDynLoad_Acquire,
-            OS_SPECIFICS->addr_OSDynLoad_FindExport
-        );
     }
+    
+    if (standardEncountered == true && coreapiEncountered == false) {
+        OSReport("Attempted to load mods without a CoreAPI. Fix your dependencies. Aborting inject!\n");
+        success = false;
+    }
+    
+    if (coreapiEncountered && coremodEncountered) {
+        OSReport("Cannot load Core Mods when a CoreAPI is available. Please update your mod or remove the CoreAPI.\n");
+        success = false;
+    }
+    
+    if (!success || !tk::validateDependencies(allDeps) || !tk::validateHooks(allHooks)) {
+        FSCloseFile(client, cmd, handle, FS_RET_NO_ERROR);
+        MEMFreeToDefaultHeap(client);
+        MEMFreeToDefaultHeap(cmd);
+        MEMFreeToDefaultHeap(buffer);
+        
+        OSReport("Something went wrong. You can ask for help in our Discord server: https://go.nsmbu.net/discord or email: contact@nsmbu.net\n");
+        
+        return; // no changes to game
+    }
+    
+    // here's the magic:
+    MAGIC_CALLBACK();
+    tk::applyHooks(coreapiHooks);
+    tk::applyHooks(stdHooks);
+    coreapiStartFunc(
+        OS_SPECIFICS->addr_OSDynLoad_Acquire,
+        OS_SPECIFICS->addr_OSDynLoad_FindExport
+    );
+    tk::callFuncs(
+        stdStartFuncs,
+        OS_SPECIFICS->addr_OSDynLoad_Acquire,
+        OS_SPECIFICS->addr_OSDynLoad_FindExport
+    );
     
     FSCloseFile(client, cmd, handle, FS_RET_NO_ERROR);
     OSReport("FSCloseFile OK\n");
@@ -249,13 +259,18 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, funcPtr callCtors) {
 
 namespace tk {
 
+const std::span<ModInfo> getMods() {
+    return sAllMods;
+}
+
 bool loadRPL(
     const char* rplName,
     std::vector<HookEntry>& hookList, std::vector<tk::startfunc_t>& startFuncs,
     u32 gameTitleID,
     bool& coreapiEncountered, std::vector<HookEntry>& coreapiHooks, startfunc_t& coreapiStartFunc,
     bool& standardEncountered, bool& coremodEncountered,
-    std::vector<HookEntry>& allHooks
+    std::vector<HookEntry>& allHooks,
+    std::vector<ModInfo>& allMods, std::vector<RequestedDependency>& allDeps
 ) {
     // Acquire RPL
     u32 rpl = 0;
@@ -286,6 +301,17 @@ bool loadRPL(
     
     const char* const modID = getModID();
     OSReport("Mod ID: %s\n", modID);
+    
+    getModID_t getVersion = nullptr;
+    err = OSDynLoad_FindExport(rpl, 0, "getVersion", &getVersion);
+    if (err != 0 || getVersion == nullptr) {
+        OSReport("Could not find getVersion, err = 0x%08X, ptr = 0x%08X\n", err, reinterpret_cast<u32>(getVersion));
+        return false;
+    }
+    
+    const char* const modVersion = getVersion();
+    
+    allMods.emplace_back(modID, modVersion);
     
     // Check type
     getModuleType_t getModuleType = nullptr;
@@ -318,6 +344,7 @@ bool loadRPL(
         const u8* version = dependencyManifest + nameLen + 1;
         
         OSReport("Dependency: [%s, %s]\n", name, version);
+        allDeps.emplace_back((const char*)modID, (const char*)name, (const char*)version);
         
         u32 versionLen = 0;
         for (const u8* c = version; *c != 0x00; c++) {
@@ -506,6 +533,203 @@ bool validateHooks(std::vector<HookEntry>& hooks) {
     }
     
     OSReport("No hook conflicts found :)\n");
+    return true;
+}
+
+static s32 check_manifest_dependency(const char* manifest_req, const char* concrete_ver_str) {
+    if (!manifest_req || !concrete_ver_str) {
+        return -1;
+    }
+
+    semver_t manifest_version = {};
+    semver_t concrete_version = {};
+    char op[5] = {0};
+    const char* p = manifest_req;
+    s32 op_idx = 0;
+
+    while (*p && isspace((unsigned char)*p)) {
+        p++;
+    }
+
+    while (*p && strchr(">=<~^!", *p)) {
+        if (op_idx < 4) {
+            op[op_idx++] = *p;
+            p++;
+        } else {
+            return -1;
+        }
+    }
+
+    while (*p && isspace((unsigned char)*p)) {
+        p++;
+    }
+
+    if (op_idx == 0) {
+        strcpy(op, "=");
+    } else {
+        const char* valid_ops[] = {">=", "<=", ">", "<", "=", "~", "^", "!=", NULL};
+        s32 valid = 0;
+        for (s32 i = 0; valid_ops[i] != NULL; i++) {
+            if (strcmp(op, valid_ops[i]) == 0) {
+                valid = 1;
+                break;
+            }
+        }
+        if (!valid) {
+            return -1;
+        }
+    }
+
+    if (*p == 'v' || *p == 'V') {
+        p++;
+    }
+
+    while (*p && isspace((unsigned char)*p)) {
+        p++;
+    }
+
+    if (strcmp(p, "*") == 0 || strcmp(p, "x") == 0 || strcmp(p, "X") == 0) {
+        if (op_idx > 0 && strcmp(op, "=") != 0) {
+            return -1;
+        }
+        return 1;
+    }
+
+    const char* wildcard_pos = strpbrk(p, "*xX");
+    if (wildcard_pos) {
+        if (op_idx > 0 && strcmp(op, "=") != 0) {
+            return -1;
+        }
+
+        char prefix[256];
+        size_t prefix_len = wildcard_pos - p;
+    
+        while (prefix_len > 0 && p[prefix_len - 1] == '.') {
+            prefix_len--;
+        }
+        
+        if (prefix_len >= sizeof(prefix)) {
+            return -1;
+        }
+        
+        memcpy(prefix, p, prefix_len);
+        prefix[prefix_len] = '\0';
+        
+        const char* concrete_p = concrete_ver_str;
+        while (*concrete_p && isspace((unsigned char)*concrete_p)) {
+            concrete_p++;
+        }
+        if (*concrete_p == 'v' || *concrete_p == 'V') {
+            concrete_p++;
+        }
+        while (*concrete_p && isspace((unsigned char)*concrete_p)) {
+            concrete_p++;
+        }
+        
+        if (prefix_len == 0) {
+            return 1;
+        }
+        
+        if (strncmp(concrete_p, prefix, prefix_len) == 0) {
+            char next = concrete_p[prefix_len];
+            if (next == '.' || next == '\0') {
+                return 1;
+            }
+        }
+        
+        return 0;
+    }
+
+    if (!*p) {
+        return -1;
+    }
+    
+    if (!isdigit((unsigned char)*p)) {
+        return -1;
+    }
+
+    if (semver_parse(p, &manifest_version) < 0) {
+        return -1;
+    }
+
+    const char* concrete_p = concrete_ver_str;
+    while (*concrete_p && isspace((unsigned char)*concrete_p)) {
+        concrete_p++;
+    }
+    if (*concrete_p == 'v' || *concrete_p == 'V') {
+        concrete_p++;
+    }
+    while (*concrete_p && isspace((unsigned char)*concrete_p)) {
+        concrete_p++;
+    }
+
+    if (semver_parse(concrete_p, &concrete_version) < 0) {
+        semver_free(&manifest_version);
+        return -2;
+    }
+
+    s32 result = semver_satisfies(concrete_version, manifest_version, op);
+
+    semver_free(&manifest_version);
+    semver_free(&concrete_version);
+
+    return result == 1;
+}
+
+static u8 lower(u8 c) {
+    if (c >= 'A' && c <= 'Z') {
+        return c + ('a' - 'A');
+    }
+    return c;
+}
+
+static int caselesscmp(const char* s1, const char* s2) {
+    const u8* p1 = (const u8*)s1;
+    const u8* p2 = (const u8*)s2;
+
+    while (*p1 && (lower(*p1) == lower(*p2))) {
+        p1++;
+        p2++;
+    }
+
+    return lower(*p1) - lower(*p2);
+}
+
+bool validateDependencies(const std::vector<RequestedDependency>& deps) { // TODO: We can optimize this, but is it necessary or worth it? (Evaluate memory/speed tradeoff)
+    const std::span<ModInfo> mods = getMods();
+    
+    OSReport("--BEGIN LOADED MODS--\n");
+    for (const ModInfo& mod : mods) {
+        OSReport("Mod: %s, %s\n", mod.id, mod.version);
+    }
+    OSReport("--END LOADED MODS--\n");
+    
+    for (const auto& [requester, requestedMod, requestedVersion] : deps) {
+        auto it = std::ranges::find_if(mods, [requestedMod](const ModInfo& mod){
+            return caselesscmp(mod.id, requestedMod) == 0;
+        });
+        
+        if (it == mods.end()) {
+            OSReport("Missing Dependency: '%s' (requested by %s)\n", requestedMod, requester);
+            return false;
+        }
+        
+        // check for semver equality
+        s32 result = check_manifest_dependency(requestedVersion, it->version);
+        if (result == -1) {
+            OSReport("Invalid version range '%s' for mod '%s' requested by '%s'\n", requestedVersion, requestedMod, requester);
+            return false;
+        } else if (result == -2) {
+            OSReport("Installed mod '%s' has invalid version string: '%s'\n", it->id, it->version);
+            return false;
+        } else if (result == 0) {
+            OSReport("Version Mismatch for '%s': Needed %s, found %s\n", requestedMod, requestedVersion, it->version);
+            return false;
+        }
+    }
+    
+    OSReport("Dependencies validated.\n");
+    
     return true;
 }
 
