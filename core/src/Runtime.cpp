@@ -23,6 +23,16 @@ void operator delete(void* ptr) noexcept {
     return MEMFreeToDefaultHeap(ptr);
 }
 
+extern "C" void free(void* ptr) {
+    MEMFreeToDefaultHeap(ptr);
+}
+
+extern "C" void* calloc(size_t num, size_t size) {
+    void* p = MEMAllocFromDefaultHeap(num * size);
+    memset(p, 0, num * size);
+    return p;
+}
+
 //------
 
 extern "C" char* strcat(char* dest, const char* src) {
@@ -193,16 +203,6 @@ namespace std {
 
 extern "C" void abort() {
     OSFatal("abort() called");
-}
-
-extern "C" void free(void* ptr) {
-    MEMFreeToDefaultHeap(ptr);
-}
-
-extern "C" void* calloc(size_t num, size_t size) {
-    void* p = MEMAllocFromDefaultHeap(num * size);
-    memset(p, 0, num * size);
-    return p;
 }
 
 extern "C" char* strchr(const char* s1, int i) {
