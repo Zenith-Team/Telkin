@@ -97,6 +97,9 @@ namespace tk {
 
 #define tAssembly(...) __attribute__((naked)) __attribute__((__noinline__)) { __asm__(TOSTRING(__VA_ARGS__)); }
 
+#define tRegSave __attribute__((no_caller_saved_registers)) // custom compiler magic for ppc
+
+#ifdef TELKIN_REGISTERS
 #define r0 %r0
 #define r1 %r1
 #define sp %r1
@@ -164,6 +167,7 @@ namespace tk {
 #define f30 %f30
 #define f31 %f31
 
+// It's recommended to use the tRegSave attribute directly in C++ instead of the below macros
 #define tSaveVolatileRegisters  \
     stwu  r1, -0x3C(r1);        \
     stw   r0,  0x08(r1);        \
@@ -203,3 +207,4 @@ namespace tk {
     lwz   r11, 0x2C(r1);        \
     lwz   r12, 0x30(r1);        \
     addi  r1,  r1, 0x3C
+#endif // TELKIN_REGISTERS
