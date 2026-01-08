@@ -10,7 +10,12 @@ extern "C" void MAGIC_CALLBACK() {
 bool tk::applyBranchHook(const tk::BranchHook* hook) {
     const u32 addr = reinterpret_cast<u32>(hook->source);
 
-    u32 instr = (reinterpret_cast<u32>(hook->target) - addr) & 0x03FFFFFC; // TODO: Validate range
+    u32 instr = (reinterpret_cast<u32>(hook->target) - addr) & 0x03FFFFFC;
+    const s32 offset = reinterpret_cast<u32>(hook->target) - addr;
+    if (offset > 0x01FFFFFC || offset < -0x02000000) {
+        OSReport("Hook target out of range (diff: %d)\n", offset);
+        return false; 
+    }
 
     switch (hook->type) {
         default: {
