@@ -64,7 +64,6 @@ namespace tk {
     );
 
     bool applyHooks(const std::vector<HookEntry>& hooks);
-    void callFuncs(const std::vector<tk::startfunc_t>& startFuncs, u32 acquireAddr, u32 exportAddr);
     bool validateHooks(std::vector<HookEntry>& hooks);
     bool validateDependencies(const std::vector<RequestedDependency>& deps);
 }
@@ -111,8 +110,8 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, funcPtr callCtors) {
     InitVPadFunctionPointers();
     InitZlibFunctionPointers();
 
-    OSReport("Telkin v" TELKIN_VERSION "by Zenith\n");
-    tk::sAllMods.emplace_back("Telkin", TELKIN_VERSION);
+    OSReport("Telkin v" TELKIN_VERSION " by Zenith\n");
+    tk::sAllMods.emplace_back("telkin", TELKIN_VERSION);
 
     FSInit();
     OSReport("FS Inited\n");
@@ -132,7 +131,7 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, funcPtr callCtors) {
     }
     OSReport("FSCmdBlock allocated\n");
 
-    constexpr int cBufferSize = 0x10000; // I hope rpl.txt won't exceed 10kb ;P
+    constexpr int cBufferSize = 10000; // I hope rpl.txt won't exceed 10kb ;P
     u8* buffer = (u8*)MEMAllocFromDefaultHeapEx(cBufferSize, FS_IO_BUFFER_ALIGN);
     if (buffer == nullptr) {
         OSReport("Error: Unable to allocate buffer\n");
@@ -154,9 +153,7 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, funcPtr callCtors) {
     OSReport("Identified title id: %08X\n", titleID);
 
     char path[FS_MAX_ARGPATH_SIZE];
-    //strncpy(path, "/vol/content/rpl.txt", FS_MAX_ARGPATH_SIZE);
-    __os_snprintf(path, sizeof(path), "/vol/content/%08X.txt", titleID);
-    OSReport("strncpy phobia overcame\n");
+    __os_snprintf(path, sizeof(path), "/vol/content/rpl.txt", titleID);
 
     FSFileHandle handle;
     FSOpenFile(client, cmd, path, "r", &handle, FS_RET_NO_ERROR);
@@ -164,17 +161,18 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, funcPtr callCtors) {
     FSReadFile(client, cmd, buffer, 1, cBufferSize, handle, 0, FS_RET_NO_ERROR);
     OSReport("FSReadFile OK\n");
 
+    FSCloseFile(client, cmd, handle, FS_RET_NO_ERROR);
+    MEMFreeToDefaultHeap(client);
+    MEMFreeToDefaultHeap(cmd);    
+    
     if (*buffer == 0) {
-        OSReport("Error: rpl.txt is empty or non-existent.\n");
+        OSReport("Error: rpl.txt is empty or non-existent.\n", titleID);
 
-        FSCloseFile(client, cmd, handle, FS_RET_NO_ERROR);
-        MEMFreeToDefaultHeap(client);
-        MEMFreeToDefaultHeap(cmd);
         MEMFreeToDefaultHeap(buffer);
 
         return;
     } else {
-        OSReport("rpl.txt was read\n");
+        OSReport("rpl.txt was read\n", titleID);
     }
 
     std::vector<tk::HookEntry> stdHooks;
@@ -214,6 +212,8 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, funcPtr callCtors) {
             line = (const char*)(buffer + i + 1);
         }
     }
+    
+    MEMFreeToDefaultHeap(buffer);
 
     if (standardEncountered == true && coreapiEncountered == false) {
         OSReport("Attempted to load mods without a CoreAPI. Fix your dependencies. Aborting inject!\n");
@@ -226,11 +226,6 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, funcPtr callCtors) {
     }
 
     if (!success || !tk::validateDependencies(allDeps) || !tk::validateHooks(allHooks)) {
-        FSCloseFile(client, cmd, handle, FS_RET_NO_ERROR);
-        MEMFreeToDefaultHeap(client);
-        MEMFreeToDefaultHeap(cmd);
-        MEMFreeToDefaultHeap(buffer);
-
         OSReport("Something went wrong. You can ask for help in our Discord server: https://go.nsmbu.net/discord or email: contact@nsmbu.net\n");
 
         return; // no changes to game
@@ -244,18 +239,12 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, funcPtr callCtors) {
         OS_SPECIFICS->addr_OSDynLoad_Acquire,
         OS_SPECIFICS->addr_OSDynLoad_FindExport
     );
-    tk::callFuncs(
-        stdStartFuncs,
-        OS_SPECIFICS->addr_OSDynLoad_Acquire,
-        OS_SPECIFICS->addr_OSDynLoad_FindExport
-    );
-
-    FSCloseFile(client, cmd, handle, FS_RET_NO_ERROR);
-    OSReport("FSCloseFile OK\n");
-    MEMFreeToDefaultHeap(client);
-    MEMFreeToDefaultHeap(cmd);
-    MEMFreeToDefaultHeap(buffer);
-    OSReport("MEMFrees OK\n");
+    for (const tk::startfunc_t func : stdStartFuncs) {
+        func(
+            OS_SPECIFICS->addr_OSDynLoad_Acquire,
+            OS_SPECIFICS->addr_OSDynLoad_FindExport
+        );
+    }
 
     OSReport("Telkin is finished loading mods. Enjoy the game!\n");
 
@@ -736,12 +725,6 @@ bool validateDependencies(const std::vector<RequestedDependency>& deps) { // TOD
     OSReport("Dependencies validated.\n");
 
     return true;
-}
-
-void callFuncs(const std::vector<tk::startfunc_t>& startFuncs, u32 acquireAddr, u32 exportAddr) {
-    for (const tk::startfunc_t func : startFuncs) {
-        func(acquireAddr, exportAddr);
-    }
 }
 
 } // namespace tk
