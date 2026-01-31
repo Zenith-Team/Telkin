@@ -35,8 +35,9 @@ bool tk::applyBranchHook(const tk::BranchHook* hook) {
     }
 
     OSReport("Writing branch hook: 0x%08X to 0x%08X\n", instr, addr);
-    *hook->source = instr;
-
+    
+    tk::sPrivilegedWrite(hook->source, &instr, sizeof(u32));
+    
     DCFlushRange(hook->source, sizeof(instr));
     ICInvalidateRange(hook->source, sizeof(instr));
     asm volatile("isync" : : : "memory");
@@ -49,7 +50,7 @@ bool tk::applyPointerHook(const tk::PointerHook* hook) {
 
     OSReport("Writing pointer hook: 0x%08X to 0x%08X\n", addr, hook->target);
 
-    *hook->source = reinterpret_cast<u32>(hook->target);
+    tk::sPrivilegedWrite(hook->source, (void*)&hook->target, sizeof(u32));
 
     DCFlushRange(hook->source, sizeof(void*));
 
@@ -62,33 +63,7 @@ bool tk::applyPatchHook(const tk::PatchHook* patch) {
 
     OSReport("Applying patch at 0x%08X\n", addr);
 
-    switch (patch->dataSize) {
-        default: {
-            OSReport("Invalid patch unit size %u at addr 0x%08X\n", patch->dataSize, addr);
-            return false;
-        }
-
-        case 8: {
-            const u8* src = reinterpret_cast<const u8*>(patch->data);
-            for (u16 i = 0; i < patch->count; i++)
-                reinterpret_cast<u8*>(addr)[i] = src[i];
-            break;
-        }
-
-        case 16: {
-            const u16* src = reinterpret_cast<const u16*>(patch->data);
-            for (u16 i = 0; i < patch->count; i++)
-                reinterpret_cast<u16*>(addr)[i] = src[i];
-            break;
-        }
-
-        case 32: {
-            const u32* src = reinterpret_cast<const u32*>(patch->data);
-            for (u16 i = 0; i < patch->count; i++)
-                reinterpret_cast<u32*>(addr)[i] = src[i];
-            break;
-        }
-    }
+    tk::sPrivilegedWrite(patch->addr, (void*)patch->data, totalSize);
 
     DCFlushRange(patch->addr, totalSize);
     ICInvalidateRange(patch->addr, totalSize);

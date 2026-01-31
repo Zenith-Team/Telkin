@@ -51,7 +51,7 @@ TelkinBootstrap:
     addi r6, r6, TelkinInitFuncHandle@l
     bctrl
 
-    # TelkinInitFuncHandle(OSDynLoad_Acquire, OSDynLoad_FindExport);
+    # TelkinInitFuncHandle(OSDynLoad_Acquire, OSDynLoad_FindExport, nullptr);
     lis r3, TelkinInitFuncHandle@ha
     lwz r3, TelkinInitFuncHandle@l(r3)
     mtctr r3
@@ -59,6 +59,7 @@ TelkinBootstrap:
     lwz r3, OSDynLoad_Acquire@l(r3)
     lis r4, OSDynLoad_FindExport@ha
     lwz r4, OSDynLoad_FindExport@l(r4)
+    li r5, 0x0
     bctrl
 
     lwz r0, 0x4(r1)

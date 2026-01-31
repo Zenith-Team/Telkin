@@ -77,11 +77,23 @@ extern "C" {
 
 extern "C" void MAGIC_CALLBACK(); // just an easy breakpoint site
 
-extern "C" void init(u32 acquireAddr, u32 exportAddr, funcPtr callCtors) {
+tk::writefunc_t tk::sPrivilegedWrite = nullptr;
+
+void directWrite(void* dst, void* src, u32 len) {
+    OSBlockMove(dst, src, len, 1);
+}
+
+extern "C" void init(u32 acquireAddr, u32 exportAddr, tk::writefunc_t writeFunc) {
     static bool initialized = false;
     if (initialized)
       return;
     initialized = true;
+    
+    if (writeFunc != nullptr) {
+        tk::sPrivilegedWrite = writeFunc;
+    } else {
+        tk::sPrivilegedWrite = &directWrite;
+    }
 
     OS_SPECIFICS->addr_OSDynLoad_Acquire = acquireAddr;
     OS_SPECIFICS->addr_OSDynLoad_FindExport = exportAddr;
