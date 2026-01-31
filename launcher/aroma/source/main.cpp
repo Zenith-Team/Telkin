@@ -13,6 +13,7 @@
 #include <coreinit/cache.h>
 #include <coreinit/dynload.h>
 #include <coreinit/title.h>
+#include <coreinit/memorymap.h>
 
 WUPS_PLUGIN_NAME("Telkin RPL Loader");
 WUPS_PLUGIN_DESCRIPTION("A dynamic Wii U mod loader.");
@@ -25,13 +26,18 @@ WUPS_USE_WUT_DEVOPTAB();
 static bool TelkinInitialized = 0;
 OSDynLoad_Module TelkinRPLHandle = nullptr;
 static CRLayerHandle contentLayerHandle;
+static CRLayerHandle aocLayerHandle;
+
+void KernWriteWrapper(uint32_t dst, uint32_t src, uint32_t len) {
+    KernelCopyData(OSEffectiveToPhysical(dst), OSEffectiveToPhysical(src), len);
+}
 
 void TelkinBootstrap() {
     WHBLogPrintf("In the Telkin bootstrap!\n");
     if (TelkinInitialized)
         return;
 
-    typedef void (*Telkin_init_t)(void *acquireAddr, void *exportAddr);
+    typedef void (*Telkin_init_t)(void *acquireAddr, void *exportAddr, void *writeFunc);
     Telkin_init_t Telkin_init;
 
     OSDynLoad_Error err = OSDynLoad_Acquire("Telkin.rpl", &TelkinRPLHandle); // load RPL from SD card
@@ -46,7 +52,7 @@ void TelkinBootstrap() {
         return;
     }
 
-    Telkin_init((void*)&OSDynLoad_Acquire, (void**)&OSDynLoad_FindExport);
+    Telkin_init((void*)&OSDynLoad_Acquire, (void**)&OSDynLoad_FindExport, (void*)&KernWriteWrapper);
     TelkinInitialized = true;
     WHBLogPrintf("Telkin has been initialized!");
     return;
@@ -54,18 +60,27 @@ void TelkinBootstrap() {
 
 void RedirectContentDir() {
     std::string titleIDString = std::format("{:016X}", OSGetTitleID());
-    std::string layerName = "Telkin FS Redirection";
-    // TODO: Add DLC redirection support (and possibly saves as well?)
-    std::string redirPath = std::format("/vol/external01/telkin/{}/content/", titleIDString);
+    // TODO: Add savefile redirection support
+    std::string redirContentPath = std::format("/vol/external01/telkin/{}/content/", titleIDString);
+    std::string redirDLCPath = std::format("/vol/external01/telkin/{}/aoc/", titleIDString);
 
-    auto ret = ContentRedirection_AddFSLayerEx(&contentLayerHandle, 
-        layerName.c_str(),
+    ContentRedirectionStatus ret = ContentRedirection_AddFSLayerEx(&contentLayerHandle, 
+        "Telkin FS Redirection - content",
         "/vol/content/",
-        redirPath.c_str(), 
+        redirContentPath.c_str(), 
         FS_LAYER_TYPE_EX_MERGE_DIRECTORY);
 
     if (ret != CONTENT_REDIRECTION_RESULT_SUCCESS) {
-        WHBLogPrintf("Failed to redirect the content dir to %s!\n", redirPath.c_str());
+        WHBLogPrintf("Failed to redirect the content dir to %s! Status message: %s", redirContentPath.c_str(), ContentRedirection_GetStatusStr(ret));
+    }
+
+    ret = ContentRedirection_AddFSLayer(&aocLayerHandle, 
+        "Telkin FS Redirection - DLC",
+        redirDLCPath.c_str(), 
+        FS_LAYER_TYPE_AOC_MERGE);
+
+    if (ret != CONTENT_REDIRECTION_RESULT_SUCCESS) {
+        WHBLogPrintf("Failed to redirect the aoc dir to %s! Status message: %s", redirDLCPath.c_str(), ContentRedirection_GetStatusStr(ret));
     }
 }
 
@@ -96,6 +111,11 @@ ON_APPLICATION_ENDS() {
     if (contentLayerHandle != 0) {
         ContentRedirection_RemoveFSLayer(contentLayerHandle);
         contentLayerHandle = 0;
+    }
+
+    if (aocLayerHandle != 0) {
+        ContentRedirection_RemoveFSLayer(aocLayerHandle);
+        aocLayerHandle = 0;
     }
 
     OSDynLoad_Release(TelkinRPLHandle);
