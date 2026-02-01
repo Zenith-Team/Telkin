@@ -37,7 +37,11 @@ void TelkinBootstrap() {
     if (TelkinInitialized)
         return;
 
-    typedef void (*Telkin_init_t)(void *acquireAddr, void *exportAddr, void *writeFunc);
+    using Telkin_writeFunc_t = void (*)(uint32_t, uint32_t, uint32_t);
+    using OSDynLoad_Acquire_t = OSDynLoad_Error (*)(char const *, OSDynLoad_Module *);
+    using OSDynLoad_Export_t = OSDynLoad_Error (*)(OSDynLoad_Module, OSDynLoad_ExportType, const char *, void **);
+
+    using Telkin_init_t = void (*)(OSDynLoad_Acquire_t acquireAddr, OSDynLoad_Export_t exportAddr, Telkin_writeFunc_t writeFunc);
     Telkin_init_t Telkin_init;
 
     OSDynLoad_Error err = OSDynLoad_Acquire("Telkin.rpl", &TelkinRPLHandle); // load RPL from SD card
@@ -52,7 +56,7 @@ void TelkinBootstrap() {
         return;
     }
 
-    Telkin_init((void*)&OSDynLoad_Acquire, (void**)&OSDynLoad_FindExport, (void*)&KernWriteWrapper);
+    Telkin_init(&OSDynLoad_Acquire, &OSDynLoad_FindExport, &KernWriteWrapper);
     TelkinInitialized = true;
     WHBLogPrintf("Telkin has been initialized!");
     return;
@@ -60,7 +64,6 @@ void TelkinBootstrap() {
 
 void RedirectContentDir() {
     std::string titleIDString = std::format("{:016X}", OSGetTitleID());
-    // TODO: Add savefile redirection support
     std::string redirContentPath = std::format("/vol/external01/telkin/{}/content/", titleIDString);
     std::string redirDLCPath = std::format("/vol/external01/telkin/{}/aoc/", titleIDString);
 
@@ -90,10 +93,6 @@ INITIALIZE_PLUGIN() {
         WHBLogPrintf("Failed to init ContentRedirection. Error %s %d", ContentRedirection_GetStatusStr(error), error);
         OSFatal("Failed to init ContentRedirection.");
     }
-}
-
-DEINITIALIZE_PLUGIN() {
-  //...
 }
 
 ON_APPLICATION_START() {
