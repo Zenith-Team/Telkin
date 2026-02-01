@@ -1,0 +1,32 @@
+name: Build (Aroma)
+
+on: [push, pull_request, workflow_dispatch]
+
+jobs:
+  build-plugin:
+    runs-on: ubuntu-latest
+    name: Build plugin
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 1
+        submodules: false
+
+    - name: Setup Docker
+      run: docker build --tag plugin-image .
+
+    - name: Build
+      uses: addnab/docker-run-action@v3
+      with:
+        image: plugin-image
+        options: --name plugin-container -v ${{ github.workspace }}:/github/workspace --workdir /github/workspace/launcher/aroma
+        run: |
+          make
+
+    - name: Upload
+      uses: actions/upload-artifact@v4
+      with:
+        name: Telkin-loader.wps
+        path: ${{ github.workspace }}/launcher/aroma/Telkin-loader.wps
+        if-no-files-found: error
