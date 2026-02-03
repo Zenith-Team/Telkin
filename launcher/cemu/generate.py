@@ -8,8 +8,6 @@ def telkin_define_region(make_args: dict) -> str:
         "; Copyright (c) 2021-2025 Zenith Team - MPL-2.0-no-copyleft-exception\r\n"
         f"[{make_args['title_id']}]\r\n"
         f"moduleMatches = {make_args['hash']}\r\n\r\n"
-        f"BLOSDynLoad_Acquire = {make_args['acquire_instr']}\r\n"
-        f"BOSDynLoad_FindExport = {make_args['export_instr']}\r\n\r\n"
         f"{make_args['inject_addr']} = b TelkinBootstrap\r\n"
     )
 
