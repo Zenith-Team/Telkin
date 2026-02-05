@@ -1,16 +1,21 @@
 .origin = codecave
 
 TelkinBootstrap:
+    # Allocate stack frame
     subi r1, r1, 0x8
+    
+    # Store LR
     mflr r0
     stw r0, 0x4(r1)
 
+    # if (Initialized) return
     lis r3, Initialized@ha
     addi r3, r3, Initialized@l
     lbz r4, 0x0(r3)
     cmpwi r4, 1
     beqlr
 
+    # Initialized = true
     li r4, 1
     stb r4, 0x0(r3)
 
@@ -42,19 +47,24 @@ TelkinBootstrap:
     li r5, 0x0
     bctrl
 
+    # Restore LR
     lwz r0, 0x4(r1)
     mtlr r0
+    
+    # Deallocate stack frame
     addi r1, r1, 0x8
+    
+    # Return (GG!)
     blr
 
 Initialized:
-.byte 0, 0, 0, 0
+.long 0
 
 TelkinRPLHandle:
-.byte 0, 0, 0, 0
+.long 0
 
 TelkinInitFuncHandle:
-.byte 0, 0, 0, 0
+.long 0
 
 TelkinRPLName:
 .string "telkin"
