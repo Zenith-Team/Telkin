@@ -89,10 +89,13 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, tk::writefunc_t writeFunc)
       return;
     initialized = true;
     
+    bool cemu = false;
+    
     if (writeFunc != nullptr) {
         tk::sPrivilegedWrite = writeFunc;
     } else {
         tk::sPrivilegedWrite = &directWrite;
+        cemu = true;
     }
 
     OS_SPECIFICS->addr_OSDynLoad_Acquire = acquireAddr;
@@ -162,10 +165,16 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, tk::writefunc_t writeFunc)
     OSReport("FSInitCmd OK\n");
 
     u64 titleID = OSGetTitleID();
-    OSReport("Identified title id: %08X\n", titleID);
+    u32 titleID_top = (titleID >> 32) & 0xFFFFFFFF;
+    u32 titleID_bot = titleID & 0xFFFFFFFF;
+    OSReport("Identified title id: %08X%08X\n", titleID_top, titleID_bot);
 
     char path[FS_MAX_ARGPATH_SIZE];
-    __os_snprintf(path, sizeof(path), "/vol/content/rpl.txt", titleID);
+    if (cemu) {
+        __os_snprintf(path, sizeof(path), "/vol/content/telkin/%08X%08X_n.txt", titleID_top, titleID_bot);
+    } else {
+        __os_snprintf(path, sizeof(path), "/vol/content/telkin/%08X%08X_s.txt", titleID_top, titleID_bot);
+    }
 
     FSFileHandle handle;
     FSOpenFile(client, cmd, path, "r", &handle, FS_RET_NO_ERROR);
@@ -178,13 +187,21 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, tk::writefunc_t writeFunc)
     MEMFreeToDefaultHeap(cmd);    
     
     if (*buffer == 0) {
-        OSReport("Error: rpl.txt is empty or non-existent.\n", titleID);
+        if (cemu) {
+            OSReport("Error: content/telkin/%08X%08X_n.txt is empty or non-existent.\n", titleID_top, titleID_bot);
+        } else {
+            OSReport("Error: content/telkin/%08X%08X_s.txt is empty or non-existent.\n", titleID_top, titleID_bot);
+        }
 
         MEMFreeToDefaultHeap(buffer);
 
         return;
     } else {
-        OSReport("rpl.txt was read\n", titleID);
+        if (cemu) {
+            OSReport("content/telkin/%08X%08X_n.txt was read\n", titleID_top, titleID_bot);
+        } else {
+            OSReport("content/telkin/%08X%08X_s.txt was read\n", titleID_top, titleID_bot);
+        }
     }
 
     std::vector<tk::HookEntry> stdHooks;
