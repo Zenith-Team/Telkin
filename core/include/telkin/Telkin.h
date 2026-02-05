@@ -85,6 +85,7 @@ namespace tk {
     const u##bits _tPatch_Data_ ## addr [] = { __VA_ARGS__ }; \
     tk::PatchHook _tPatch_ ## addr __attribute__((section(".loaderdata"))) = tk::PatchHook(tk::DataMagic::PatchHook, reinterpret_cast<u32*>(addr), sizeof(_tPatch_Data_##addr) / sizeof(u##bits), bits, reinterpret_cast<const void*>(&_tPatch_Data_##addr));
 
+#define tPatch8(addr, ...) _tPatch(addr, 8, __VA_ARGS__)
 #define tPatch16(addr, ...) _tPatch(addr, 16, __VA_ARGS__)
 #define tPatch32(addr, ...) _tPatch(addr, 32, __VA_ARGS__)
 #define tPatch64(addr, ...) _tPatch(addr, 64, __VA_ARGS__)
