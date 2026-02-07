@@ -1,6 +1,7 @@
 ; Telkin Loader
 ; Copyright (c) 2023-2026 Zenith Team - MPL-2.0-no-copyleft-exception
 [TelkinLauncher_Cemu]
+moduleMatches=rpx
 
 .origin = codecave
 
