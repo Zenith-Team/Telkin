@@ -1,4 +1,7 @@
-name = Telkin Loader
-path = "Mods/Telkin Loader"
-description = Dynamic code loader.||Made by Zenith Team.
+[Definition]
+titleIds = *
+
+name = ${PLACEHOLDER_NAME}
+path = "Mods/${PLACEHOLDER_NAME}"
+description = ${PLACEHOLDER_DESC}
 version = 6

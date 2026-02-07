@@ -1,5 +1,10 @@
+; Telkin Loader
+; Copyright (c) 2023-2026 Zenith Team - MPL-2.0-no-copyleft-exception
+[TelkinLauncher_Cemu]
+
 .origin = codecave
 
+.callback TelkinBootstrap
 TelkinBootstrap:
     # Allocate stack frame
     subi r1, r1, 0x8
