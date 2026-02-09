@@ -5,11 +5,11 @@ moduleMatches=rpx
 
 .origin = codecave
 
-.callback TelkinBootstrap
+.callback entry TelkinBootstrap
 TelkinBootstrap:
     # Allocate stack frame
-    subi r1, r1, 0x8
-    
+    subi r1, r1, 0x10
+
     # Store LR
     mflr r0
     stw r0, 0x4(r1)
@@ -56,10 +56,10 @@ TelkinBootstrap:
     # Restore LR
     lwz r0, 0x4(r1)
     mtlr r0
-    
+
     # Deallocate stack frame
-    addi r1, r1, 0x8
-    
+    addi r1, r1, 0x10
+
     # Return (GG!)
     blr
 
@@ -73,7 +73,7 @@ TelkinInitFuncHandle:
 .long 0
 
 TelkinRPLName:
-.string "telkin"
+.string "Telkin"
 
 TelkinInitFuncName:
 .string "init"
