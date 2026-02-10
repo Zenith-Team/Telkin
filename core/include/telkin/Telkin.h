@@ -75,7 +75,7 @@ namespace tk {
     const std::span<ModInfo> getMods();
 }
 
-#define tHook(addr, target, type) \
+#define tBranch(addr, target, type) \
     tk::BranchHook _tHook_ ## addr __attribute__((section(".loaderdata"))) = tk::BranchHook(tk::DataMagic::BranchHook, reinterpret_cast<u32*>(addr), target, type);
 
 #define tPointer(addr, target, isdata) \
