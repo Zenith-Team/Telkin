@@ -14,7 +14,7 @@ jobs:
         submodules: false
 
     - name: Setup Docker
-      run: docker build --tag plugin-image .
+      run: docker build --tag plugin-image ./launcher/aroma
 
     - name: Build
       uses: addnab/docker-run-action@v3
