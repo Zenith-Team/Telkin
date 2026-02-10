@@ -12,7 +12,7 @@ namespace tk {
         PatchHook   = 0x03C0FFEE,
     };
 
-    constexpr int cHookSize = 16;
+    constexpr int cHookSize = 0x10;
 
     enum class BranchType : u32 {
         b,
