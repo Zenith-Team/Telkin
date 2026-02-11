@@ -124,6 +124,7 @@ bool tk::readPatchHook(void* hookPtr, std::vector<HookEntry>& list, std::vector<
         case 8:
         case 16:
         case 32:
+        case 64:
             break;
     }
     
