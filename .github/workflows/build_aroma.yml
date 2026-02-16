@@ -21,7 +21,7 @@ jobs:
         docker run --rm \
           --name plugin-container \
           -v "${{ github.workspace }}:/github/workspace" \
-          -w /github/workspace \
+          -w /github/workspace/launcher/aroma \
           plugin-image \
           make
 
