@@ -17,11 +17,12 @@ jobs:
       run: docker build --tag plugin-image ./launcher/aroma
 
     - name: Build
-      uses: addnab/docker-run-action@v3
-      with:
-        image: plugin-image
-        options: --name plugin-container -v ${{ github.workspace }}:/github/workspace --workdir /github/workspace/launcher/aroma
-        run: |
+      run: |
+        docker run --rm \
+          --name plugin-container \
+          -v "${{ github.workspace }}:/github/workspace" \
+          -w /github/workspace \
+          plugin-image \
           make
 
     - name: Upload
