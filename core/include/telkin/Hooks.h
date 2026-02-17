@@ -21,7 +21,7 @@ namespace tk {
     struct BranchHook {
         DataMagic magic;
         u32* source;
-        const void* target;
+        const char* target;
         BranchType type;
     };
 
@@ -32,7 +32,7 @@ namespace tk {
     struct PointerHook {
         DataMagic magic;
         u32* source;
-        const void* target;
+        const char* target;
         u32 isData; // bool
     };
 
