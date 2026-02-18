@@ -1,6 +1,12 @@
 name: Build (Aroma Plugin)
 
-on: [push, pull_request, workflow_dispatch]
+on:
+  push:
+    paths:
+      - 'launcher/aroma'
+  pull_request:
+    paths:
+      - 'launcher/aroma'
 
 jobs:
   build-plugin:
