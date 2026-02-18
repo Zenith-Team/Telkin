@@ -55,37 +55,37 @@ namespace tk {
 
 // Normal func
 #define _tBranch3(addr, target, type) \
-    static tk::BranchHook _tHook_ ## addr __attribute__((section(".loaderdata"))) = tk::BranchHook(tk::DataMagic::BranchHook, reinterpret_cast<u32*>(addr), __builtin_mangle(target), type);
+    tk::BranchHook _tHook_ ## addr __attribute__((section(".loaderdata"))) = tk::BranchHook(tk::DataMagic::BranchHook, reinterpret_cast<u32*>(addr), __builtin_mangle(target), type);
 
 // Overloaded func
 #define _tBranch4(addr, target, sig, type) \
-    static tk::BranchHook _tHook_ ## addr __attribute__((section(".loaderdata"))) = tk::BranchHook(tk::DataMagic::BranchHook, reinterpret_cast<u32*>(addr), __builtin_mangle(target, sig), type);
+    tk::BranchHook _tHook_ ## addr __attribute__((section(".loaderdata"))) = tk::BranchHook(tk::DataMagic::BranchHook, reinterpret_cast<u32*>(addr), __builtin_mangle(target, sig), type);
 
 #define tBranch(...) \
     PP_CONCAT_VAL(_tBranch, PP_NARG(__VA_ARGS__))(__VA_ARGS__)
 
 // Explicit mangled string
 #define tBranchEx(addr, targetSym, type) \
-    static tk::BranchHook _tHook_ ## addr __attribute__((section(".loaderdata"))) = tk::BranchHook{tk::DataMagic::BranchHook, reinterpret_cast<u32*>(addr), targetSym, type};
+    tk::BranchHook _tHook_ ## addr __attribute__((section(".loaderdata"))) = tk::BranchHook(tk::DataMagic::BranchHook, reinterpret_cast<u32*>(addr), targetSym, type);
 
 // Normal func/var
 #define _tPointer3(addr, target, isdata) \
-    static tk::PointerHook _tHook_ ## addr __attribute__((section(".loaderdata"))) = tk::PointerHook{tk::DataMagic::PointerHook, reinterpret_cast<u32*>(addr), __builtin_mangle(target), isdata};
+    tk::PointerHook _tHook_ ## addr __attribute__((section(".loaderdata"))) = tk::PointerHook(tk::DataMagic::PointerHook, reinterpret_cast<u32*>(addr), __builtin_mangle(target), isdata);
 
 // Overloaded func
 #define _tPointer4(addr, target, sig, isdata) \
-    static tk::PointerHook _tHook_ ## addr __attribute__((section(".loaderdata"))) = tk::PointerHook{tk::DataMagic::PointerHook, reinterpret_cast<u32*>(addr), __builtin_mangle(target, sig), isdata};
+    tk::PointerHook _tHook_ ## addr __attribute__((section(".loaderdata"))) = tk::PointerHook(tk::DataMagic::PointerHook, reinterpret_cast<u32*>(addr), __builtin_mangle(target, sig), isdata);
 
 #define tPointer(...) \
     PP_CONCAT_VAL(_tPointer, PP_NARG(__VA_ARGS__))(__VA_ARGS__)
 
 // Explicit mangled string
 #define tPointerEx(addr, targetSym, isdata) \
-    static tk::PointerHook _tHook_ ## addr __attribute__((section(".loaderdata"))) = tk::PointerHook{tk::DataMagic::PointerHook, reinterpret_cast<u32*>(addr), targetSym, isdata};
+    tk::PointerHook _tHook_ ## addr __attribute__((section(".loaderdata"))) = tk::PointerHook(tk::DataMagic::PointerHook, reinterpret_cast<u32*>(addr), targetSym, isdata);
 
 #define _tPatch(addr, bits, ...) \
     const u##bits _tPatch_Data_ ## addr [] = { __VA_ARGS__ }; \
-    static tk::PatchHook _tPatch_ ## addr __attribute__((section(".loaderdata"))) = tk::PatchHook{tk::DataMagic::PatchHook, reinterpret_cast<u32*>(addr), sizeof(_tPatch_Data_##addr) / sizeof(u##bits), bits, reinterpret_cast<const void*>(&_tPatch_Data_##addr)};
+    tk::PatchHook _tPatch_ ## addr __attribute__((section(".loaderdata"))) = tk::PatchHook(tk::DataMagic::PatchHook, reinterpret_cast<u32*>(addr), sizeof(_tPatch_Data_##addr) / sizeof(u##bits), bits, reinterpret_cast<const void*>(&_tPatch_Data_##addr));
 
 #define tPatch8(addr, ...) _tPatch(addr, 8, __VA_ARGS__)
 #define tPatch16(addr, ...) _tPatch(addr, 16, __VA_ARGS__)
