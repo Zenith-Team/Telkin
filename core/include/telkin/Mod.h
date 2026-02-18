@@ -24,4 +24,5 @@ namespace tk {
     };
     
     const std::span<ModInfo> getMods();
+    bool isModLoaded(const char* id);
 }

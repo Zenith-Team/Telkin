@@ -280,15 +280,22 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, tk::writefunc_t writeFunc)
     return;
 }
 
-namespace tk {
-
-const std::span<ModInfo> getMods() {
+const std::span<tk::ModInfo> tk::getMods() {
     return sAllMods;
 }
 
-bool loadRPL(
+bool tk::isModLoaded(const char* id) {
+    const std::span<ModInfo> mods = tk::getMods();
+    std::string_view target{id};
+    
+    return std::ranges::any_of(mods, [target](const ModInfo& mod) {
+        return mod.id == target; 
+    });
+}
+
+bool tk::loadRPL(
     const char* rplName,
-    std::vector<HookEntry>& hookList, std::vector<tk::startfunc_t>& startFuncs,
+    std::vector<HookEntry>& hookList, std::vector<startfunc_t>& startFuncs,
     u32 gameTitleID,
     bool& coreapiEncountered, std::vector<HookEntry>& coreapiHooks, startfunc_t& coreapiStartFunc,
     bool& standardEncountered, bool& coremodEncountered,
@@ -504,7 +511,7 @@ bool loadRPL(
     return true;
 }
 
-bool applyHooks(const std::vector<HookEntry>& hooks) {
+bool tk::applyHooks(const std::vector<HookEntry>& hooks) {
     for (const HookEntry& entry : hooks) {
         const GenericHook* hook = entry.hook;
 
@@ -535,7 +542,7 @@ bool applyHooks(const std::vector<HookEntry>& hooks) {
     return true;
 }
 
-bool validateHooks(std::vector<HookEntry>& hooks) {
+bool tk::validateHooks(std::vector<HookEntry>& hooks) {
     OSReport("Validating hooks...\n");
 
     if (hooks.size() <= 1) {
@@ -718,7 +725,7 @@ static int caselesscmp(const char* s1, const char* s2) {
     return lower(*p1) - lower(*p2);
 }
 
-bool validateDependencies(const std::vector<RequestedDependency>& deps) { // TODO: We can optimize this, but is it necessary or worth it? (Evaluate memory/speed tradeoff)
+bool tk::validateDependencies(const std::vector<RequestedDependency>& deps) { // TODO: We can optimize this, but is it necessary or worth it? (Evaluate memory/speed tradeoff)
     const std::span<ModInfo> mods = getMods();
 
     OSReport("--BEGIN LOADED MODS--\n");
@@ -755,5 +762,3 @@ bool validateDependencies(const std::vector<RequestedDependency>& deps) { // TOD
 
     return true;
 }
-
-} // namespace tk
