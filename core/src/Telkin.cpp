@@ -6,6 +6,7 @@
 #include <dynamic_libs/ax_functions.h>
 #include <dynamic_libs/fs_functions.h>
 #include <dynamic_libs/gx2_functions.h>
+#include <dynamic_libs/h264_functions.h>
 #include <dynamic_libs/nfp_functions.h>
 #include <dynamic_libs/nn_act_functions.h>
 #include <dynamic_libs/nn_fp_functions.h>
@@ -111,6 +112,7 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, tk::writefunc_t writeFunc)
     // InitAXFunctionPointers(); // TODO: Fix this crash
     InitFSFunctionPointers();
     InitGX2FunctionPointers();
+    InitH264FunctionPointers();
     InitNFPFunctionPointers();
     InitACTFunctionPointers();
     InitFpFunctionPointers();
