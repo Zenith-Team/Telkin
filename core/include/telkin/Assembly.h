@@ -2,9 +2,11 @@
 
 #include <telkin/Preprocessor.h>
 
+// thx to mkwcat/nsmbw-project for some of these
+
 #define tAssembly(...) __attribute__((naked)) __attribute__((__noinline__)) { __asm__(PP_STR_VAL(__VA_ARGS__)); }
 
-#define tRegSave __attribute__((preserve_all)) // custom compiler magic for ppc
+#define tRegSave __attribute__((preserve_all)) // red hills compiler magic for ppc
 
 #ifdef TELKIN_REGISTERS
 #define r0 %r0
@@ -114,4 +116,15 @@
     lwz   r11, 0x2C(r1);        \
     lwz   r12, 0x30(r1);        \
     addi  r1,  r1, 0x3C
+
+#define tSaveLR \
+    stwu r1, -0x10(r1) \
+    mflr r2 \
+    stw r2, 0x14(r1)
+
+#define tRestoreLR \
+    lwz r2, 0x14(r1) \
+    mtlr r2 \
+    addi r1, r1, 0x10
+
 #endif // TELKIN_REGISTERS
