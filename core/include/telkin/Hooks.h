@@ -53,13 +53,19 @@ namespace tk {
     static_assert(std::is_trivially_destructible<PatchHook>::value, "PatchHook is not trivially destructible");
 }
 
+#ifdef __clangd__
+#define tMangle(...) PP_STR(__VA_ARGS__)
+#else
+#define tMangle(...) __builtin_mangle(__VA_ARGS__) // red hills compiler magic
+#endif
+
 // Normal func
 #define _tBranch3(addr, target, type) \
-    tk::BranchHook _tHook_ ## addr __attribute__((section(".loaderdata"))) = tk::BranchHook(tk::DataMagic::BranchHook, reinterpret_cast<u32*>(addr), __builtin_mangle(target), type);
+    tk::BranchHook _tHook_ ## addr __attribute__((section(".loaderdata"))) = tk::BranchHook(tk::DataMagic::BranchHook, reinterpret_cast<u32*>(addr), tMangle(target), type);
 
 // Overloaded func
 #define _tBranch4(addr, target, sig, type) \
-    tk::BranchHook _tHook_ ## addr __attribute__((section(".loaderdata"))) = tk::BranchHook(tk::DataMagic::BranchHook, reinterpret_cast<u32*>(addr), __builtin_mangle(target, sig), type);
+    tk::BranchHook _tHook_ ## addr __attribute__((section(".loaderdata"))) = tk::BranchHook(tk::DataMagic::BranchHook, reinterpret_cast<u32*>(addr), tMangle(target, sig), type);
 
 #define tBranch(...) \
     PP_CONCAT_VAL(_tBranch, PP_NARG(__VA_ARGS__))(__VA_ARGS__)
@@ -70,11 +76,11 @@ namespace tk {
 
 // Normal func/var
 #define _tPointer3(addr, target, isdata) \
-    tk::PointerHook _tHook_ ## addr __attribute__((section(".loaderdata"))) = tk::PointerHook(tk::DataMagic::PointerHook, reinterpret_cast<u32*>(addr), __builtin_mangle(target), isdata);
+    tk::PointerHook _tHook_ ## addr __attribute__((section(".loaderdata"))) = tk::PointerHook(tk::DataMagic::PointerHook, reinterpret_cast<u32*>(addr), tMangle(target), isdata);
 
 // Overloaded func
 #define _tPointer4(addr, target, sig, isdata) \
-    tk::PointerHook _tHook_ ## addr __attribute__((section(".loaderdata"))) = tk::PointerHook(tk::DataMagic::PointerHook, reinterpret_cast<u32*>(addr), __builtin_mangle(target, sig), isdata);
+    tk::PointerHook _tHook_ ## addr __attribute__((section(".loaderdata"))) = tk::PointerHook(tk::DataMagic::PointerHook, reinterpret_cast<u32*>(addr), tMangle(target, sig), isdata);
 
 #define tPointer(...) \
     PP_CONCAT_VAL(_tPointer, PP_NARG(__VA_ARGS__))(__VA_ARGS__)
