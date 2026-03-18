@@ -4,3 +4,4 @@
 #include <telkin/Hooks.h>
 #include <telkin/Mod.h>
 #include <telkin/Print.h>
+#include <telkin/Privilege.h>

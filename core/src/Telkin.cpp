@@ -78,10 +78,10 @@ extern "C" {
 
 extern "C" void MAGIC_CALLBACK(); // just an easy breakpoint site
 
-tk::writefunc_t tk::sPrivilegedWrite = nullptr;
+tk::writefunc_t tk::privilegedWrite = nullptr;
 
-void directWrite(void* dst, void* src, u32 len) {
-    OSBlockMove(dst, src, len, 1);
+void directWrite(const void* dst, const void* src, u32 len) {
+    OSBlockMove((void*)dst, src, len, 1);
 }
 
 extern "C" void init(u32 acquireAddr, u32 exportAddr, tk::writefunc_t writeFunc) {
@@ -93,9 +93,9 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, tk::writefunc_t writeFunc)
     bool cemu = false;
     
     if (writeFunc != nullptr) {
-        tk::sPrivilegedWrite = writeFunc;
+        tk::privilegedWrite = writeFunc;
     } else {
-        tk::sPrivilegedWrite = &directWrite;
+        tk::privilegedWrite = &directWrite;
         cemu = true;
     }
 
