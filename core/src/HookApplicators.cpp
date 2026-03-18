@@ -37,7 +37,7 @@ bool tk::applyBranchHook(const tk::BranchHook* hook) {
 
     tk::print("Writing branch hook: 0x%08X to 0x%08X\n", instr, addr);
     
-    tk::sPrivilegedWrite(hook->source, &instr, sizeof(u32));
+    tk::privilegedWrite(hook->source, &instr, sizeof(u32));
     
     DCFlushRange(hook->source, sizeof(instr));
     ICInvalidateRange(hook->source, sizeof(instr));
@@ -51,7 +51,7 @@ bool tk::applyPointerHook(const tk::PointerHook* hook) {
 
     tk::print("Writing pointer hook: 0x%08X to 0x%08X\n", addr, hook->target);
 
-    tk::sPrivilegedWrite(hook->source, (void*)&hook->target, sizeof(u32));
+    tk::privilegedWrite(hook->source, (void*)&hook->target, sizeof(u32));
 
     DCFlushRange(hook->source, sizeof(void*));
 
@@ -64,7 +64,7 @@ bool tk::applyPatchHook(const tk::PatchHook* patch) {
 
     tk::print("Applying patch at 0x%08X\n", addr);
 
-    tk::sPrivilegedWrite(patch->addr, (void*)patch->data, totalSize);
+    tk::privilegedWrite(patch->addr, (void*)patch->data, totalSize);
 
     DCFlushRange(patch->addr, totalSize);
     ICInvalidateRange(patch->addr, totalSize);
