@@ -1,10 +1,11 @@
 #include <new>
 #include <cafe.h>
 #include <cstdarg>
+#include <climits>
 #include <limits>
 
 #define sprintf(str, format, ...) \
-    __os_snprintf(str, (size_t)-1, format, ##__VA_ARGS__)
+    __os_snprintf(str, INT_MAX, format, ##__VA_ARGS__)
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wwritable-strings"
