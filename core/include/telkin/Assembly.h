@@ -118,13 +118,13 @@
     addi  r1,  r1, 0x3C
 
 #define tSaveLR \
-    stwu r1, -0x10(r1) \
-    mflr r2 \
+    stwu r1, -0x10(r1); \
+    mflr r2; \
     stw r2, 0x14(r1)
 
 #define tRestoreLR \
-    lwz r2, 0x14(r1) \
-    mtlr r2 \
+    lwz r2, 0x14(r1); \
+    mtlr r2; \
     addi r1, r1, 0x10
 
 #endif // TELKIN_REGISTERS
