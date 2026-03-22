@@ -11,7 +11,7 @@ namespace tk {
         PatchHook   = 0x03C0FFEE,
     };
 
-    constexpr int cHookSize = 0x10;
+    constexpr int cHookSize = 0x20;
 
     enum class BranchType : u32 {
         b,
@@ -23,6 +23,10 @@ namespace tk {
         u32* source;
         const char* target;
         BranchType type;
+        u32 reserved1;
+        u32 reserved2;
+        u32 reserved3;
+        u32 reserved4;
     };
 
     static_assert(sizeof(BranchHook) == cHookSize, "BranchHook size mismatch");
@@ -34,6 +38,10 @@ namespace tk {
         u32* source;
         const char* target;
         u32 isData; // bool
+        u32 reserved1;
+        u32 reserved2;
+        u32 reserved3;
+        u32 reserved4;
     };
 
     static_assert(sizeof(PointerHook) == cHookSize, "PointerHook size mismatch");
@@ -46,6 +54,10 @@ namespace tk {
         u16 count;
         u16 dataSize; // in bits
         const void* data;
+        u32 reserved1;
+        u32 reserved2;
+        u32 reserved3;
+        u32 reserved4;
     };
 
     static_assert(sizeof(PatchHook) == cHookSize, "PatchHook size mismatch");
@@ -61,42 +73,58 @@ namespace tk {
 
 // Normal func
 #define _tBranch3(addr, target, type) \
-    tk::BranchHook _tHook_ ## addr __attribute__((section(".loaderdata"))) = tk::BranchHook(tk::DataMagic::BranchHook, reinterpret_cast<u32*>(addr), tMangle(target), type);
+    tk::BranchHook _tHook_ ## addr __attribute__((section(".loaderdata"))) = tk::BranchHook(tk::DataMagic::BranchHook, reinterpret_cast<u32*>(addr), tMangle(target), type, 0, 0, 0, 0);
 
 // Overloaded func
 #define _tBranch4(addr, target, sig, type) \
-    tk::BranchHook _tHook_ ## addr __attribute__((section(".loaderdata"))) = tk::BranchHook(tk::DataMagic::BranchHook, reinterpret_cast<u32*>(addr), tMangle(target, sig), type);
+    tk::BranchHook _tHook_ ## addr __attribute__((section(".loaderdata"))) = tk::BranchHook(tk::DataMagic::BranchHook, reinterpret_cast<u32*>(addr), tMangle(target, sig), type, 0, 0, 0, 0);
 
 #define tBranch(...) \
     PP_CONCAT_VAL(_tBranch, PP_NARG(__VA_ARGS__))(__VA_ARGS__)
 
 // Explicit mangled string
 #define tBranchEx(addr, targetSym, type) \
-    tk::BranchHook _tHook_ ## addr __attribute__((section(".loaderdata"))) = tk::BranchHook(tk::DataMagic::BranchHook, reinterpret_cast<u32*>(addr), targetSym, type);
+    tk::BranchHook _tHook_ ## addr __attribute__((section(".loaderdata"))) = tk::BranchHook(tk::DataMagic::BranchHook, reinterpret_cast<u32*>(addr), targetSym, type, 0, 0, 0, 0);
 
 // Normal func/var
 #define _tPointer3(addr, target, isdata) \
-    tk::PointerHook _tHook_ ## addr __attribute__((section(".loaderdata"))) = tk::PointerHook(tk::DataMagic::PointerHook, reinterpret_cast<u32*>(addr), tMangle(target), isdata);
+    tk::PointerHook _tHook_ ## addr __attribute__((section(".loaderdata"))) = tk::PointerHook(tk::DataMagic::PointerHook, reinterpret_cast<u32*>(addr), tMangle(target), isdata, 0, 0, 0, 0);
 
 // Overloaded func
 #define _tPointer4(addr, target, sig, isdata) \
-    tk::PointerHook _tHook_ ## addr __attribute__((section(".loaderdata"))) = tk::PointerHook(tk::DataMagic::PointerHook, reinterpret_cast<u32*>(addr), tMangle(target, sig), isdata);
+    tk::PointerHook _tHook_ ## addr __attribute__((section(".loaderdata"))) = tk::PointerHook(tk::DataMagic::PointerHook, reinterpret_cast<u32*>(addr), tMangle(target, sig), isdata, 0, 0, 0, 0);
 
 #define tPointer(...) \
     PP_CONCAT_VAL(_tPointer, PP_NARG(__VA_ARGS__))(__VA_ARGS__)
 
 // Explicit mangled string
 #define tPointerEx(addr, targetSym, isdata) \
-    tk::PointerHook _tHook_ ## addr __attribute__((section(".loaderdata"))) = tk::PointerHook(tk::DataMagic::PointerHook, reinterpret_cast<u32*>(addr), targetSym, isdata);
+    tk::PointerHook _tHook_ ## addr __attribute__((section(".loaderdata"))) = tk::PointerHook(tk::DataMagic::PointerHook, reinterpret_cast<u32*>(addr), targetSym, isdata, 0, 0, 0, 0);
 
-#define _tPatch(addr, bits, ...) \
+#define _tPatch_u(addr, bits, ...) \
     const u##bits _tPatch_Data_ ## addr [] = { __VA_ARGS__ }; \
-    tk::PatchHook _tPatch_ ## addr __attribute__((section(".loaderdata"))) = tk::PatchHook(tk::DataMagic::PatchHook, reinterpret_cast<u32*>(addr), sizeof(_tPatch_Data_##addr) / sizeof(u##bits), bits, reinterpret_cast<const void*>(&_tPatch_Data_##addr));
+    tk::PatchHook _tPatch_ ## addr __attribute__((section(".loaderdata"))) = tk::PatchHook(tk::DataMagic::PatchHook, reinterpret_cast<u32*>(addr), sizeof(_tPatch_Data_##addr) / sizeof(u##bits), bits, reinterpret_cast<const void*>(&_tPatch_Data_##addr), 0, 0, 0, 0);
 
-#define tPatch8(addr, ...) _tPatch(addr, 8, __VA_ARGS__)
-#define tPatch16(addr, ...) _tPatch(addr, 16, __VA_ARGS__)
-#define tPatch32(addr, ...) _tPatch(addr, 32, __VA_ARGS__)
-#define tPatch64(addr, ...) _tPatch(addr, 64, __VA_ARGS__)
+#define _tPatch_s(addr, bits, ...) \
+    const s##bits _tPatch_Data_ ## addr [] = { __VA_ARGS__ }; \
+    tk::PatchHook _tPatch_ ## addr __attribute__((section(".loaderdata"))) = tk::PatchHook(tk::DataMagic::PatchHook, reinterpret_cast<u32*>(addr), sizeof(_tPatch_Data_##addr) / sizeof(u##bits), bits, reinterpret_cast<const void*>(&_tPatch_Data_##addr), 0, 0, 0, 0);
 
-#define tPatchNop(addr) tPatch32(addr, 0x60000000)
-#define tPatchBlr(addr) tPatch32(addr, 0x4E800020)
+#define _tPatch_f(addr, bits, ...) \
+    const f##bits _tPatch_Data_ ## addr [] = { __VA_ARGS__ }; \
+    tk::PatchHook _tPatch_ ## addr __attribute__((section(".loaderdata"))) = tk::PatchHook(tk::DataMagic::PatchHook, reinterpret_cast<u32*>(addr), sizeof(_tPatch_Data_##addr) / sizeof(u##bits), bits, reinterpret_cast<const void*>(&_tPatch_Data_##addr), 0, 0, 0, 0);
+
+#define tPatch8u(addr, ...) _tPatch_u(addr, 8, __VA_ARGS__)
+#define tPatch16u(addr, ...) _tPatch_u(addr, 16, __VA_ARGS__)
+#define tPatch32u(addr, ...) _tPatch_u(addr, 32, __VA_ARGS__)
+#define tPatch64u(addr, ...) _tPatch_u(addr, 64, __VA_ARGS__)
+
+#define tPatch8s(addr, ...) _tPatch_s(addr, 8, __VA_ARGS__)
+#define tPatch16s(addr, ...) _tPatch_s(addr, 16, __VA_ARGS__)
+#define tPatch32s(addr, ...) _tPatch_s(addr, 32, __VA_ARGS__)
+#define tPatch64s(addr, ...) _tPatch_s(addr, 64, __VA_ARGS__)
+
+#define tPatch32f(addr, ...) _tPatch_f(addr, 32, __VA_ARGS__)
+#define tPatch64f(addr, ...) _tPatch_f(addr, 64, __VA_ARGS__)
+
+#define tPatchNop(addr) tPatch32u(addr, 0x60000000)
+#define tPatchBlr(addr) tPatch32u(addr, 0x4E800020)
