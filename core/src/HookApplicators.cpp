@@ -62,7 +62,7 @@ bool tk::applyPatchHook(const tk::PatchHook* patch) {
     const u32 addr = reinterpret_cast<u32>(patch->addr);
     const u32 totalSize = patch->count * (patch->dataSize / 8);
 
-    tk::print("Applying patch at 0x%08X\n", addr);
+    tk::print("Applying %d-byte patch from 0x%08X to 0x%08X\n", totalSize, addr, addr + totalSize);
 
     tk::privilegedWrite(patch->addr, (void*)patch->data, totalSize);
 
