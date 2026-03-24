@@ -5,17 +5,17 @@
 // thx to mkwcat/nsmbw-project for some of these
 
 #ifdef TELKIN_NO_REGISTERS
-#define TELKIN_REGISTERS_WARNING()
+    #define TELKIN_REGISTERS_WARNING()
 #else
-#define TELKIN_REGISTERS_WARNING() _Pragma("message \"WARNING: TELKIN_REGISTERS was not defined. It is recommended to globally define TELKIN_NO_REGISTERS if this was intentional\"")
+    #define TELKIN_REGISTERS_WARNING() _Pragma("message \"WARNING: TELKIN_REGISTERS was not defined. It is recommended to globally define TELKIN_NO_REGISTERS if this was intentional\"")
 #endif
 
 #ifdef TELKIN_REGISTERS
-#define tAssembly(...) __attribute__((naked)) __attribute__((__noinline__)) { __asm__(PP_STR_VAL(__VA_ARGS__)); }
+    #define tAssembly(...) __attribute__((naked)) __attribute__((__noinline__)) { __asm__ volatile (PP_STR_VAL(__VA_ARGS__)); }
 #else
-#define tAssembly(...) \
-    __attribute__((naked)) __attribute__((__noinline__)) { __asm__(PP_STR_VAL(__VA_ARGS__)); } \
-    TELKIN_REGISTERS_WARNING()
+    #define tAssembly(...) \
+        TELKIN_REGISTERS_WARNING() \
+        __attribute__((naked)) __attribute__((__noinline__)) { __asm__ volatile (PP_STR_VAL(__VA_ARGS__)); }
 #endif
 
 #ifdef __clangd__
