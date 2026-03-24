@@ -66,9 +66,9 @@ namespace tk {
 }
 
 #ifdef __clangd__
-#define tMangle(...) PP_STR(__VA_ARGS__)
+    #define tMangle(...) PP_STR(__VA_ARGS__)
 #else
-#define tMangle(...) __builtin_mangle(__VA_ARGS__) // red hills compiler magic
+    #define tMangle(...) __builtin_mangle(__VA_ARGS__) // red hills compiler magic
 #endif
 
 // Normal func

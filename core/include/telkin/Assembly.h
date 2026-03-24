@@ -4,9 +4,25 @@
 
 // thx to mkwcat/nsmbw-project for some of these
 
-#define tAssembly(...) __attribute__((naked)) __attribute__((__noinline__)) { __asm__(PP_STR_VAL(__VA_ARGS__)); }
+#ifdef TELKIN_NO_REGISTERS
+#define TELKIN_REGISTERS_WARNING()
+#else
+#define TELKIN_REGISTERS_WARNING() _Pragma("message \"WARNING: TELKIN_REGISTERS was not defined. It is recommended to globally define TELKIN_NO_REGISTERS if this was intentional\"")
+#endif
 
-#define tRegSave __attribute__((preserve_all)) // red hills compiler magic for ppc
+#ifdef TELKIN_REGISTERS
+#define tAssembly(...) __attribute__((naked)) __attribute__((__noinline__)) { __asm__(PP_STR_VAL(__VA_ARGS__)); }
+#else
+#define tAssembly(...) \
+    __attribute__((naked)) __attribute__((__noinline__)) { __asm__(PP_STR_VAL(__VA_ARGS__)); } \
+    TELKIN_REGISTERS_WARNING()
+#endif
+
+#ifdef __clangd__
+    #define tRegSave __attribute__(())
+#else
+    #define tRegSave __attribute__((preserve_all)) // red hills compiler magic for ppc
+#endif
 
 #ifdef TELKIN_REGISTERS
 #define r0 %r0
