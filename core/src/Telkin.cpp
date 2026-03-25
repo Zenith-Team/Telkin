@@ -28,7 +28,6 @@
 
 #include <vector>
 #include <algorithm>
-#include <ranges>
 
 /*
    ______    ____    _
