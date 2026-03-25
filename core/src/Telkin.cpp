@@ -556,7 +556,7 @@ bool tk::validateHooks(std::vector<HookEntry>& hooks) {
         return lhs.startAddr < rhs.startAddr;
     });
 
-    for (s32 i = 1; i < hooks.size(); i++) {
+    for (size_t i = 1; i < hooks.size(); i++) {
         if (hooks.data()[i].startAddr < hooks.data()[i - 1].endAddr) {
             // TODO: Better diagnostic here with mod blame and addrs/types
             tk::print("MOD INCOMPATIBILITY: Overlapping hooks found!\n");
