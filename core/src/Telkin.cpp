@@ -109,7 +109,7 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, tk::writefunc_t writeFunc)
     InitOSFunctionPointers();
     InitACPFunctionPointers();
     InitAocFunctionPointers();
-    // InitAXFunctionPointers(); // TODO: Fix this crash
+    InitAXFunctionPointers();
     InitFSFunctionPointers();
     InitGX2FunctionPointers();
     InitH264FunctionPointers();
