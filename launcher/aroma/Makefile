@@ -21,9 +21,9 @@ WUMS_ROOT := $(DEVKITPRO)/wums
 #-------------------------------------------------------------------------------
 TARGET		:=	Telkin-loader
 BUILD		:=	build
-SOURCES		:=	source source/patcher
+SOURCES		:=	src
 DATA		:=	data
-INCLUDES	:=	source
+INCLUDES	:=	src
 
 #-------------------------------------------------------------------------------
 # options for code generation
