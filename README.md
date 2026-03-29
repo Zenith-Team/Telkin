@@ -23,7 +23,7 @@ Telkin is a powerful and dynamic mod-loading framework designed for the Wii U's 
   - Cache Invalidation: Coherency is enforced via synchronization steps taken place during the patch application step
 - And more coming soon: Hot-reload and reversible hooks are currently being investigated
 
-## Usage (End Users)
+## Usage (Players)
 ### Wii U
 Telkin's Aroma launcher requires a modified Wii U running [Aroma](https://aroma.foryour.cafe/) custom firmware. Visit [here](https://wiiu.hacks.guide) for a tutorial on installing Aroma. The launcher also needs Zenith's custom fork of [MochaPayload](https://github.com/Zenith-Team/MochaPayload/releases/latest) in order for Telkin plugins to be properly loaded from the SD card. Once `00_mocha.rpx` has been downloaded, place it into the directory `sd:/wiiu/environments/aroma/modules/setup` on your SD card. Afterwards, place the `telkin` folder bundled with the mod on the root of your SD card. Once everything is in place, simply launch the game and the mods should be applied!
 
