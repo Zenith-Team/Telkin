@@ -75,8 +75,6 @@ extern "C" {
     void __rpl_crt() { } // Called by Cafe OS on acquire, don't do anything here
 }
 
-extern "C" void MAGIC_CALLBACK(); // just an easy breakpoint site
-
 tk::writefunc_t tk::privilegedWrite = nullptr;
 
 void directWrite(const void* dst, const void* src, u32 len) {

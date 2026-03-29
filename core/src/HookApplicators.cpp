@@ -4,10 +4,6 @@
 
 #include <dynamic_libs/os_functions.h>
 
-extern "C" void MAGIC_CALLBACK() {
-    // defined externally for no-inline
-}
-
 bool tk::applyBranchHook(const tk::BranchHook* hook) {
     const u32 addr = reinterpret_cast<u32>(hook->source);
 
