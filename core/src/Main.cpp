@@ -260,7 +260,6 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, tk::writefunc_t writeFunc)
     }
 
     // here's the magic:
-    MAGIC_CALLBACK();
     tk::applyHooks(coreapiHooks);
     tk::applyHooks(stdHooks);
     coreapiStartFunc(
