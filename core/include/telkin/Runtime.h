@@ -120,25 +120,25 @@ extern "C" char* strcpy(char* dst0, const char* src0) {
 #endif
 
 #ifdef TK_IMPL_ISSPACE
-extern "C" bool isspace(char c) {
+extern "C" int isspace(int c) {
     return (c == ' ');
 }
 #endif
 
 #ifdef TK_IMPL_ISDIGIT
-extern "C" bool isdigit(char c) {
+extern "C" int isdigit(int c) {
     return (c >= '0' && c <= '9');
 }
 #endif
 
 #ifdef TK_IMPL_ISUPPER
-extern "C" bool isupper(char c) {
+extern "C" int isupper(int c) {
     return (c >= 'A' && c <= 'Z');
 }
 #endif
 
 #ifdef TK_IMPL_ISALPHA
-extern "C" bool isalpha(char c) {
+extern "C" int isalpha(int c) {
     return ((isupper(c) || (c >= 'a' && c <= 'z')));
 }
 #endif
