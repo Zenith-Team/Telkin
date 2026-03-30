@@ -130,6 +130,8 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, tk::writefunc_t writeFunc)
     FSInit();
     tk::print("FS Inited\n");
 
+    // TODO: Can we move these to the stack?
+    
     FSClient* client = (FSClient*)MEMAllocFromDefaultHeap(sizeof(FSClient));
     if (client == nullptr) {
         tk::print("Error: Unable to allocate FSClient\n");
@@ -145,103 +147,87 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, tk::writefunc_t writeFunc)
     }
     tk::print("FSCmdBlock allocated\n");
 
-    constexpr int cBufferSize = 10000; // I hope rpl.txt won't exceed 10kb ;P
-    u8* buffer = (u8*)MEMAllocFromDefaultHeapEx(cBufferSize, FS_IO_BUFFER_ALIGN);
-    if (buffer == nullptr) {
-        tk::print("Error: Unable to allocate buffer\n");
-        MEMFreeToDefaultHeap(client);
-        MEMFreeToDefaultHeap(cmd);
-        return;
-    }
-    tk::print("Allocated buffer\n");
-
-    OSBlockSet(buffer, 0, cBufferSize);
-    tk::print("OSBlockSet OK\n");
-
     FSAddClient(client, FS_RET_NO_ERROR);
     tk::print("FSAddClient OK\n");
     FSInitCmdBlock(cmd);
     tk::print("FSInitCmd OK\n");
 
-    u64 titleID = OSGetTitleID();
-    u32 titleID_top = (titleID >> 32) & 0xFFFFFFFF;
-    u32 titleID_bot = titleID & 0xFFFFFFFF;
+    const u64 titleID = OSGetTitleID();
+    u32 titleID_top = (titleID >> 32) & 0xFFFFFFFFU;
+    u32 titleID_bot = titleID & 0xFFFFFFFFU;
+    if (!cemu) {
+        titleID_top |= 0xC0000000U; //* tag for console
+    }
     tk::print("Identified title id: %08X%08X\n", titleID_top, titleID_bot);
 
-    char path[FS_MAX_ARGPATH_SIZE];
-    if (cemu) {
-        __os_snprintf(path, sizeof(path), "/vol/content/telkin/%08X%08X_n.txt", titleID_top, titleID_bot);
-    } else {
-        __os_snprintf(path, sizeof(path), "/vol/content/telkin/%08X%08X_s.txt", titleID_top, titleID_bot);
-    }
-
-    FSFileHandle handle;
-    FSOpenFile(client, cmd, path, "r", &handle, FS_RET_NO_ERROR);
-    tk::print("FSOpenFile OK\n");
-    FSReadFile(client, cmd, buffer, 1, cBufferSize, handle, 0, FS_RET_NO_ERROR);
-    tk::print("FSReadFile OK\n");
-
-    FSCloseFile(client, cmd, handle, FS_RET_NO_ERROR);
-    MEMFreeToDefaultHeap(client);
-    MEMFreeToDefaultHeap(cmd);    
+    char coreDirPath[FS_MAX_ARGPATH_SIZE];
+    __os_snprintf(coreDirPath, sizeof(coreDirPath), "/vol/content/telkin/%08X%08X/core/", titleID_top, titleID_bot);
+    FSDirHandle coreDir;
+    FSOpenDir(client, cmd, coreDirPath, &coreDir, FS_RET_NO_ERROR);
+    tk::print("FSOpenDir1 %s OK\n", coreDirPath);
     
-    if (*buffer == 0) {
-        if (cemu) {
-            tk::print("Error: content/telkin/%08X%08X_n.txt is empty or non-existent.\n", titleID_top, titleID_bot);
-        } else {
-            tk::print("Error: content/telkin/%08X%08X_s.txt is empty or non-existent.\n", titleID_top, titleID_bot);
-        }
-
-        MEMFreeToDefaultHeap(buffer);
-
-        return;
-    } else {
-        if (cemu) {
-            tk::print("content/telkin/%08X%08X_n.txt was read\n", titleID_top, titleID_bot);
-        } else {
-            tk::print("content/telkin/%08X%08X_s.txt was read\n", titleID_top, titleID_bot);
-        }
-    }
-
+    char modsDirPath[FS_MAX_ARGPATH_SIZE];
+    __os_snprintf(modsDirPath, sizeof(modsDirPath), "/vol/content/telkin/%08X%08X/mods/", titleID_top, titleID_bot);
+    FSDirHandle modsDir;
+    FSOpenDir(client, cmd, modsDirPath, &modsDir, FS_RET_NO_ERROR);
+    tk::print("FSOpenDir2 %s OK\n", modsDirPath);
+    
+    // Read & load
+    
     std::vector<tk::HookEntry> stdHooks;
     std::vector<tk::HookEntry> coreapiHooks;
     std::vector<tk::HookEntry> allHooks;
     std::vector<tk::startfunc_t> stdStartFuncs;
     std::vector<tk::RequestedDependency> allDeps;
     tk::startfunc_t coreapiStartFunc = nullptr;
-
+    
     bool success = true;
     bool coreapiEncountered = false;
     bool standardEncountered = false;
     bool coremodEncountered = false;
-    u32 gameTitleID = static_cast<u32>(OSGetTitleID());
-
-    const char* line = (const char*)buffer;
-    for (u32 i = 0; i < cBufferSize; i++) {
-        if (buffer[i] == '\n') { // TODO: Support CRLF
-            buffer[i] = '\0';
-
-            if (!tk::loadRPL(
-                line,
-                stdHooks, stdStartFuncs,
-                gameTitleID,
-                coreapiEncountered, coreapiHooks, coreapiStartFunc,
-                standardEncountered, coremodEncountered,
-                allHooks,
-                tk::sAllMods, allDeps
-            )) {
-                success = false;
-                tk::print("RPL failed to load, aborting inject!\n");
-                break;
-            }
-
-            tk::print("Finished loading RPL: %s\n", line);
-
-            line = (const char*)(buffer + i + 1);
+    u32 gameTitleID = static_cast<u32>(titleID);
+    FSDirEntry directoryEntry;
+    // Pass 1: Core mods
+    while (FSReadDir(client, cmd, coreDir, &directoryEntry, FS_RET_NO_ERROR) == FS_STATUS_OK) {
+        tk::print("Loading %s.rpl\n", directoryEntry.name);
+        
+        success = tk::loadRPL(
+            directoryEntry.name,
+            stdHooks, stdStartFuncs,
+            gameTitleID,
+            coreapiEncountered, coreapiHooks, coreapiStartFunc,
+            standardEncountered, coremodEncountered,
+            allHooks,
+            tk::sAllMods, allDeps
+        );
+        
+        if (!success) {
+            tk::print("RPL failed to load, aborting inject!\n");
+            break;
         }
     }
-    
-    MEMFreeToDefaultHeap(buffer);
+    // Pass 2: Standard mods
+    while (FSReadDir(client, cmd, modsDir, &directoryEntry, FS_RET_NO_ERROR) == FS_STATUS_OK) {
+        tk::print("Loading %s.rpl\n", directoryEntry.name);
+        
+        success = tk::loadRPL(
+            directoryEntry.name,
+            stdHooks, stdStartFuncs,
+            gameTitleID,
+            coreapiEncountered, coreapiHooks, coreapiStartFunc,
+            standardEncountered, coremodEncountered,
+            allHooks,
+            tk::sAllMods, allDeps
+        );
+        
+        if (!success) {
+            tk::print("RPL failed to load, aborting inject!\n");
+            break;
+        }
+    }
+
+    MEMFreeToDefaultHeap(client);
+    MEMFreeToDefaultHeap(cmd);
 
     if (standardEncountered == true && coreapiEncountered == false) {
         tk::print("Attempted to load mods without a CoreAPI. Fix your dependencies. Aborting inject!\n");
@@ -262,10 +248,12 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, tk::writefunc_t writeFunc)
     // here's the magic:
     tk::applyHooks(coreapiHooks);
     tk::applyHooks(stdHooks);
-    coreapiStartFunc(
-        OS_SPECIFICS->addr_OSDynLoad_Acquire,
-        OS_SPECIFICS->addr_OSDynLoad_FindExport
-    );
+    if (coreapiStartFunc) {
+        coreapiStartFunc(
+            OS_SPECIFICS->addr_OSDynLoad_Acquire,
+            OS_SPECIFICS->addr_OSDynLoad_FindExport
+        );
+    }
     for (const tk::startfunc_t func : stdStartFuncs) {
         func(
             OS_SPECIFICS->addr_OSDynLoad_Acquire,
