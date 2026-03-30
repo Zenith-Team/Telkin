@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cafe.h>
+#include <cmath>
 
 #ifdef TK_IMPL_OPERATOR_NEW
 void* operator new(std::size_t size) {
@@ -100,6 +101,16 @@ extern "C" void* memset(void* dst, int value, size_t size) {
 }
 #endif
 
+#ifdef TK_IMPL_SPRINTF
+extern "C" int sprintf(char* buffer, const char* format, ...) {
+    __va_list va;
+    va_start(va, format);
+    const int ret = vsnprintf(buffer, INT_MAX, format, va);
+    va_end(va);
+    return ret;
+}
+#endif
+
 #ifdef TK_IMPL_STRCHR
 extern "C" char* strchr(const char* s1, int i) {
     const unsigned char* s = (const unsigned char*)s1;
@@ -116,6 +127,48 @@ extern "C" char* strcpy(char* dst0, const char* src0) {
     char* s = dst0;
     while ((*dst0++ = *src0++));
     return s;
+}
+#endif
+
+#ifdef TK_IMPL_FLOOR
+extern "C" double floor(double x) {
+    return floorf(x);
+}
+#endif
+
+#ifdef TK_IMPL_CEIL
+extern "C" double ceil(double x) {
+    return ceilf(x);
+}
+#endif
+
+#ifdef TK_IMPL_SIN
+extern "C" double sin(double x) {
+    return sinf(x);
+}
+#endif
+
+#ifdef TK_IMPL_COS
+extern "C" double cos(double x) {
+    return cosf(x);
+}
+#endif
+
+#ifdef TK_IMPL_ATAN2
+extern "C" double atan2(double y, double x) {
+    return atan2f(y, x);
+}
+#endif
+
+#ifdef TK_IMPL_POW
+extern "C" double pow(double x, double y) {
+    return powf(x, y);
+}
+#endif
+
+#ifdef TK_IMPL_LOG
+extern "C" double log(double x) {
+    return logf(x);
 }
 #endif
 
