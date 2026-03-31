@@ -81,6 +81,8 @@ void directWrite(const void* dst, const void* src, u32 len) {
     OSBlockMove((void*)dst, src, len, 1);
 }
 
+static int caselesscmp(const char* s1, const char* s2); // forward decl
+
 extern "C" void init(u32 acquireAddr, u32 exportAddr, tk::writefunc_t writeFunc) {
     static bool initialized = false;
     if (initialized)
@@ -317,6 +319,13 @@ bool tk::loadRPL(
 
     const char* const modID = getModID();
     tk::print("Mod ID: %s\n", modID);
+    
+    for (const auto& otherMod : allMods) {
+        if (caselesscmp(otherMod.id, modID) == 0) {
+            tk::print("ERROR: Duplicate mods loaded: %s\n", modID);
+            return false;
+        }
+    }
 
     getModID_t getVersion = nullptr;
     err = OSDynLoad_FindExport(rpl, 0, "getVersion", &getVersion);
