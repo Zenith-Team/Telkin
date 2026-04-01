@@ -2,6 +2,9 @@
 
 #include <cafe.h>
 #include <cmath>
+#include <cctype>
+#include <cstdarg>
+#include <climits>
 
 #ifdef TK_IMPL_OPERATOR_NEW
 void* operator new(std::size_t size) {
