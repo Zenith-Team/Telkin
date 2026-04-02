@@ -50,7 +50,7 @@ void TelkinBootstrap() {
         return;
     }
 
-    err = OSDynLoad_FindExport(&TelkinRPLHandle, OS_DYNLOAD_EXPORT_FUNC, "init", (void**)&Telkin_init);
+    err = OSDynLoad_FindExport(TelkinRPLHandle, OS_DYNLOAD_EXPORT_FUNC, "init", (void**)&Telkin_init);
     if (err != OS_DYNLOAD_OK) {
         WHBLogPrintf("Couldn't find Telkin's 'init' function! Err code: %08X\n", err);
         return;
