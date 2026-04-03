@@ -72,8 +72,25 @@ extern "C" {
     using funcPtr = void (*)();
     extern funcPtr __init_array_start[], __init_array_end[];
 
-    void __rpl_crt() { } // Called by Cafe OS on acquire, don't do anything here
+    int __rpl_crt() { return 0; } // Called by Cafe OS on acquire, don't do anything here
 }
+
+template <typename T>
+class UniquePtrMEM {
+public:
+    UniquePtrMEM(size_t n)
+        : mPtr((T*)MEMAllocFromDefaultHeap(n))
+    { }
+    
+    ~UniquePtrMEM() {
+        MEMFreeToDefaultHeap(mPtr);
+    }
+    
+    T* get() const { return mPtr; }
+    
+private:
+    T* mPtr;
+};
 
 tk::writefunc_t tk::privilegedWrite = nullptr;
 
@@ -134,24 +151,23 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, tk::writefunc_t writeFunc)
 
     // TODO: Can we move these to the stack?
     
-    FSClient* client = (FSClient*)MEMAllocFromDefaultHeap(sizeof(FSClient));
-    if (client == nullptr) {
+    UniquePtrMEM<FSClient> client = sizeof(FSClient);
+    if (client.get() == nullptr) {
         tk::print("Error: Unable to allocate FSClient\n");
         return;
     }
     tk::print("FSClient allocated\n");
 
-    FSCmdBlock* cmd = (FSCmdBlock*)MEMAllocFromDefaultHeap(sizeof(FSCmdBlock));
-    if (cmd == nullptr) {
+    UniquePtrMEM<FSCmdBlock> cmd = sizeof(FSCmdBlock);
+    if (cmd.get() == nullptr) {
         tk::print("Error: Unable to allocate FSCmdBlock\n");
-        MEMFreeToDefaultHeap(client);
         return;
     }
     tk::print("FSCmdBlock allocated\n");
 
-    FSAddClient(client, FS_RET_NO_ERROR);
+    FSAddClient(client.get(), FS_RET_NO_ERROR);
     tk::print("FSAddClient OK\n");
-    FSInitCmdBlock(cmd);
+    FSInitCmdBlock(cmd.get());
     tk::print("FSInitCmd OK\n");
 
     const u64 titleID = OSGetTitleID();
@@ -165,14 +181,17 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, tk::writefunc_t writeFunc)
     char coreDirPath[FS_MAX_ARGPATH_SIZE];
     __os_snprintf(coreDirPath, sizeof(coreDirPath), "/vol/content/telkin/%08X%08X/core/", titleID_top, titleID_bot);
     FSDirHandle coreDir;
-    FSOpenDir(client, cmd, coreDirPath, &coreDir, FS_RET_NO_ERROR);
+    if (FSOpenDir(client.get(), cmd.get(), coreDirPath, &coreDir, FS_RET_ALL_ERROR) != FS_STATUS_OK) {
+        tk::print("Couldn't find coremods path. Gracefully returning...\n");
+        return;
+    }
     tk::print("FSOpenDir1 %s OK\n", coreDirPath);
     
     char modsDirPath[FS_MAX_ARGPATH_SIZE];
     __os_snprintf(modsDirPath, sizeof(modsDirPath), "/vol/content/telkin/%08X%08X/mods/", titleID_top, titleID_bot);
     FSDirHandle modsDir;
-    FSOpenDir(client, cmd, modsDirPath, &modsDir, FS_RET_NO_ERROR);
-    tk::print("FSOpenDir2 %s OK\n", modsDirPath);
+    const bool hasStandardMods = FSOpenDir(client.get(), cmd.get(), modsDirPath, &modsDir, FS_RET_ALL_ERROR) == FS_STATUS_OK;
+    tk::print("FSOpenDir2 %s OK: %s\n", modsDirPath, hasStandardMods ? "Standard mods found" : "No standard mods present");
     
     // Read & load
     
@@ -190,7 +209,7 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, tk::writefunc_t writeFunc)
     u32 gameTitleID = static_cast<u32>(titleID);
     FSDirEntry directoryEntry;
     // Pass 1: Core mods
-    while (FSReadDir(client, cmd, coreDir, &directoryEntry, FS_RET_NO_ERROR) == FS_STATUS_OK) {
+    while (FSReadDir(client.get(), cmd.get(), coreDir, &directoryEntry, FS_RET_NO_ERROR) == FS_STATUS_OK) {
         tk::print("Loading %s.rpl\n", directoryEntry.name);
         
         success = tk::loadRPL(
@@ -209,7 +228,7 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, tk::writefunc_t writeFunc)
         }
     }
     // Pass 2: Standard mods
-    while (FSReadDir(client, cmd, modsDir, &directoryEntry, FS_RET_NO_ERROR) == FS_STATUS_OK) {
+    while (hasStandardMods && FSReadDir(client.get(), cmd.get(), modsDir, &directoryEntry, FS_RET_NO_ERROR) == FS_STATUS_OK) {
         tk::print("Loading %s.rpl\n", directoryEntry.name);
         
         success = tk::loadRPL(
@@ -227,9 +246,6 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, tk::writefunc_t writeFunc)
             break;
         }
     }
-
-    MEMFreeToDefaultHeap(client);
-    MEMFreeToDefaultHeap(cmd);
 
     if (standardEncountered == true && coreapiEncountered == false) {
         tk::print("Attempted to load mods without a CoreAPI. Fix your dependencies. Aborting inject!\n");
