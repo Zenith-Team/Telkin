@@ -3,10 +3,10 @@ name: Build (Aroma Plugin)
 on:
   push:
     paths:
-      - 'launcher/aroma'
+      - 'launcher/aroma/**'
   pull_request:
     paths:
-      - 'launcher/aroma'
+      - 'launcher/aroma/**'
 
 jobs:
   build-plugin:
