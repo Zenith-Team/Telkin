@@ -116,7 +116,7 @@ ON_APPLICATION_ENDS() {
         ContentRedirection_RemoveFSLayer(aocLayerHandle);
         aocLayerHandle = 0;
     }
-
+    TelkinInitialized = 0;
     OSDynLoad_Release(TelkinRPLHandle);
     TelkinRPLHandle = nullptr;
 }
