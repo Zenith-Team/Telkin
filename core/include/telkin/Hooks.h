@@ -9,6 +9,7 @@ namespace tk {
         BranchHook  = 0x01C0FFEE,
         PointerHook = 0x02C0FFEE,
         PatchHook   = 0x03C0FFEE,
+        NullHook    = 0x04C0FFEE,
     };
 
     constexpr int cHookSize = 0x20;
@@ -63,6 +64,15 @@ namespace tk {
     static_assert(sizeof(PatchHook) == cHookSize, "PatchHook size mismatch");
     static_assert(std::is_trivially_constructible<PatchHook>::value, "PatchHook is not trivially constructible");
     static_assert(std::is_trivially_destructible<PatchHook>::value, "PatchHook is not trivially destructible");
+    
+    struct NullHook {
+        DataMagic magic;
+        u8 padding[cHookSize - sizeof(DataMagic)];
+    };
+    
+    static_assert(sizeof(NullHook) == cHookSize, "NullHook size mismatch");
+    static_assert(std::is_trivially_constructible<NullHook>::value, "NullHook is not trivially constructible");
+    static_assert(std::is_trivially_destructible<NullHook>::value, "NullHook is not trivially destructible");
 }
 
 #ifdef __clangd__

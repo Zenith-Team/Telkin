@@ -75,6 +75,24 @@ extern "C" {
     int __rpl_crt() { return 0; } // Called by Cafe OS on acquire, don't do anything here
 }
 
+// Ensure .loaderdata isn't empty
+tk::NullHook _tHook_NullInit __attribute__((section(".loaderdata"))) = tk::NullHook(tk::DataMagic::BranchHook);
+
+// Ensure .init_array isn't empty
+#pragma clang optimize off
+struct NullCtor {
+    [[clang::noinline, gnu::used]]
+    NullCtor() : x(0) {
+        asm volatile("nop");
+    }
+    ~NullCtor() = default;
+    int x;
+};
+
+[[gnu::used]]
+NullCtor _tHook_NullCtor;
+#pragma clang optimize on
+
 template <typename T>
 class UniquePtrMEM {
 public:
@@ -505,6 +523,10 @@ bool tk::loadRPL(
                 if (!tk::readPatchHook(hook, *outputHookList, allHooks))
                     return false;
 
+                break;
+            }
+            
+            case tk::DataMagic::NullHook: {
                 break;
             }
 
