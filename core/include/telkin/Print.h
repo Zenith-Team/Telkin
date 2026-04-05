@@ -8,7 +8,7 @@
 namespace tk {
     
     namespace internal {
-        consteval const char* basename(const char* path) {
+        constexpr const char* basename(const char* path) {
             const char* last = path;
         
             for (const char* p = path; *p; ++p) {
@@ -39,5 +39,15 @@ namespace tk {
         
         OSReport("[%s:%d] ", format.file, format.line);
         OSReport(fmt, std::forward<Args>(args)...);
+    }
+    
+    template <typename... Args>
+    void fatal(internal::LogFormat format, Args&&... args) {
+        const auto& fmt = format.fmt;
+        
+        OSReport("[%s:%d] ERROR: ", format.file, format.line);
+        OSReport(fmt, std::forward<Args>(args)...);
+        
+        OSFatal(fmt); // TODO: When line wrapping works, format everything and print that
     }
 }

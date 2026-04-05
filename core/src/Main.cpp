@@ -241,7 +241,7 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, tk::writefunc_t writeFunc)
         );
         
         if (!success) {
-            tk::print("RPL failed to load, aborting inject!\n");
+            tk::fatal("RPL failed to load, aborting inject!\n");
             break;
         }
     }
@@ -260,23 +260,23 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, tk::writefunc_t writeFunc)
         );
         
         if (!success) {
-            tk::print("RPL failed to load, aborting inject!\n");
+            tk::fatal("RPL failed to load, aborting inject!\n");
             break;
         }
     }
 
     if (standardEncountered == true && coreapiEncountered == false) {
-        tk::print("Attempted to load mods without a CoreAPI. Fix your dependencies. Aborting inject!\n");
+        tk::fatal("Attempted to load mods without a CoreAPI. Fix your dependencies. Aborting inject!\n");
         success = false;
     }
 
     if (coreapiEncountered && coremodEncountered) {
-        tk::print("Cannot load Core Mods when a CoreAPI is available. Please update your mod or remove the CoreAPI.\n");
+        tk::fatal("Cannot load Core Mods when a CoreAPI is available. Please update your mod or remove the CoreAPI.\n");
         success = false;
     }
 
     if (!success || !tk::validateDependencies(allDeps) || !tk::validateHooks(allHooks)) {
-        tk::print("Something went wrong. You can ask for help in our Discord server: https://go.nsmbu.net/discord or email: contact@nsmbu.net\n");
+        tk::fatal("Something went wrong. You can ask for help in our Discord server: https://go.nsmbu.net/discord or email: contact@nsmbu.net\n");
 
         return; // no changes to game
     }
@@ -327,27 +327,27 @@ bool tk::loadRPL(
     // Acquire RPL
     u32 rpl = 0;
     if (OSDynLoad_Acquire(rplName, &rpl) != 0) {
-        tk::print("Unable to acquire RPL: %s\n", rplName);
+        tk::fatal("Unable to acquire RPL: %s\n", rplName);
         return false;
     }
 
     getTitleID_t getTitleID = nullptr;
     s32 err = OSDynLoad_FindExport(rpl, 0, "getTitleID", &getTitleID);
     if (err != 0 || getTitleID == nullptr) {
-        tk::print("Could not find getTitleID, err = 0x%08X, ptr = 0x%08X\n", err, reinterpret_cast<u32>(getTitleID));
+        tk::fatal("Could not find getTitleID, err = 0x%08X, ptr = 0x%08X\n", err, reinterpret_cast<u32>(getTitleID));
         return false;
     }
 
     u32 rplTitleIDTarget = static_cast<u32>(getTitleID());
     if (gameTitleID != rplTitleIDTarget) {
-        tk::print("RPL %s title ID mismatch, OS: %08X, RPL: %08X\n", rplName, gameTitleID, rplTitleIDTarget);
+        tk::fatal("RPL %s title ID mismatch, OS: %08X, RPL: %08X\n", rplName, gameTitleID, rplTitleIDTarget);
         return false;
     }
 
     getModID_t getModID = nullptr;
     err = OSDynLoad_FindExport(rpl, 0, "getModID", &getModID);
     if (err != 0 || getModID == nullptr) {
-        tk::print("Could not find getModID, err = 0x%08X, ptr = 0x%08X\n", err, reinterpret_cast<u32>(getModID));
+        tk::fatal("Could not find getModID, err = 0x%08X, ptr = 0x%08X\n", err, reinterpret_cast<u32>(getModID));
         return false;
     }
 
@@ -356,7 +356,7 @@ bool tk::loadRPL(
     
     for (const auto& otherMod : allMods) {
         if (caselesscmp(otherMod.id, modID) == 0) {
-            tk::print("ERROR: Duplicate mods loaded: %s\n", modID);
+            tk::fatal("Duplicate mods loaded: %s\n", modID);
             return false;
         }
     }
@@ -364,7 +364,7 @@ bool tk::loadRPL(
     getModID_t getVersion = nullptr;
     err = OSDynLoad_FindExport(rpl, 0, "getVersion", &getVersion);
     if (err != 0 || getVersion == nullptr) {
-        tk::print("Could not find getVersion, err = 0x%08X, ptr = 0x%08X\n", err, reinterpret_cast<u32>(getVersion));
+        tk::fatal("Could not find getVersion, err = 0x%08X, ptr = 0x%08X\n", err, reinterpret_cast<u32>(getVersion));
         return false;
     }
 
@@ -376,7 +376,7 @@ bool tk::loadRPL(
     getModuleType_t getModuleType = nullptr;
     err = OSDynLoad_FindExport(rpl, 0, "getModuleType", &getModuleType);
     if (err != 0 || getModID == nullptr) {
-        tk::print("Could not find getModuleType, err = 0x%08X, ptr = 0x%08X\n", err, reinterpret_cast<u32>(getModuleType));
+        tk::fatal("Could not find getModuleType, err = 0x%08X, ptr = 0x%08X\n", err, reinterpret_cast<u32>(getModuleType));
         return false;
     }
 
@@ -384,7 +384,7 @@ bool tk::loadRPL(
     getDependencyManifest_t getDependencyManifest = nullptr;
     err = OSDynLoad_FindExport(rpl, 0, "getDependencyManifest", &getDependencyManifest);
     if (err != 0 || getDependencyManifest == nullptr) {
-        tk::print("Could not find getDependencyManifest, err = 0x%08X, ptr = 0x%08X\n", err, reinterpret_cast<u32>(getDependencyManifest));
+        tk::fatal("Could not find getDependencyManifest, err = 0x%08X, ptr = 0x%08X\n", err, reinterpret_cast<u32>(getDependencyManifest));
         return false;
     }
 
@@ -419,7 +419,7 @@ bool tk::loadRPL(
     switch (moduleType) {
         case tk::ModuleType::CoreAPI: {
             if (coreapiEncountered) {
-                tk::print("Cannot load multiple CoreAPI modules simultaneously!\n");
+                tk::fatal("Cannot load multiple CoreAPI modules simultaneously!\n");
                 return false;
             }
 
@@ -430,7 +430,7 @@ bool tk::loadRPL(
             tk::startfunc_t start = nullptr;
             err = OSDynLoad_FindExport(rpl, 0, "__rpl_start", &start);
             if (err != 0 || start == nullptr) {
-                tk::print("Could not find __rpl_start, err = 0x%08X, ptr = 0x%08X\n", err, reinterpret_cast<u32>(start));
+                tk::fatal("Could not find __rpl_start, err = 0x%08X, ptr = 0x%08X\n", err, reinterpret_cast<u32>(start));
                 return false;
             }
             coreapiStartFunc = start;
@@ -440,7 +440,7 @@ bool tk::loadRPL(
 
         case tk::ModuleType::CoreMod: {
             if (coreapiEncountered) {
-                tk::print("Cannot load Core Mods when a CoreAPI is available. Please update your mod or remove the CoreAPI.\n");
+                tk::fatal("Cannot load Core Mods when a CoreAPI is available. Please update your mod or remove the CoreAPI.\n");
                 return false;
             }
 
@@ -450,7 +450,7 @@ bool tk::loadRPL(
             tk::startfunc_t start = nullptr;
             err = OSDynLoad_FindExport(rpl, 0, "__rpl_start", &start);
             if (err != 0 || start == nullptr) {
-                tk::print("Could not find __rpl_start, err = 0x%08X, ptr = 0x%08X\n", err, reinterpret_cast<u32>(start));
+                tk::fatal("Could not find __rpl_start, err = 0x%08X, ptr = 0x%08X\n", err, reinterpret_cast<u32>(start));
                 return false;
             }
             startFuncs.emplace_back(start);
@@ -463,7 +463,7 @@ bool tk::loadRPL(
             tk::startfunc_t start = nullptr;
             err = OSDynLoad_FindExport(rpl, 0, "__rpl_start", &start);
             if (err != 0 || start == nullptr) {
-                tk::print("Could not find __rpl_start, err = 0x%08X, ptr = 0x%08X\n", err, reinterpret_cast<u32>(start));
+                tk::fatal("Could not find __rpl_start, err = 0x%08X, ptr = 0x%08X\n", err, reinterpret_cast<u32>(start));
                 return false;
             }
             startFuncs.emplace_back(start);
@@ -496,7 +496,7 @@ bool tk::loadRPL(
 
     tk::print("DEBUG: DATA Hooks begin at 0x%08X, end at 0x%08X\n", reinterpret_cast<u32>(hooksBegin), reinterpret_cast<u32>(hooksEnd));
     if (hooksBegin == nullptr || hooksEnd == nullptr || hooksBegin >= hooksEnd) {
-        tk::print("Hooks are bad");
+        tk::fatal("Hooks are bad");
         return false;
     }
 
@@ -531,7 +531,7 @@ bool tk::loadRPL(
             }
 
             default: {
-                tk::print("Unknown magic (0x%08X) encountered after %u hooks\n", hook->magic, hookCount);
+                tk::fatal("Unknown magic (0x%08X) encountered after %u hooks\n", hook->magic, hookCount);
                 return false;
             }
         }
@@ -590,7 +590,7 @@ bool tk::validateHooks(std::vector<HookEntry>& hooks) {
     for (size_t i = 1; i < hooks.size(); i++) {
         if (hooks.data()[i].startAddr < hooks.data()[i - 1].endAddr) {
             // TODO: Better diagnostic here with mod blame and addrs/types
-            tk::print("MOD INCOMPATIBILITY: Overlapping hooks found!\n");
+            tk::fatal("MOD INCOMPATIBILITY: Overlapping hooks found!\n");
             return false;
         }
     }
@@ -773,20 +773,20 @@ bool tk::validateDependencies(const std::vector<RequestedDependency>& deps) { //
         });
 
         if (it == mods.end()) {
-            tk::print("Missing Dependency: '%s' (requested by %s)\n", requestedMod, requester);
+            tk::fatal("Missing Dependency: '%s' (requested by %s)\n", requestedMod, requester);
             return false;
         }
 
         // check for semver equality
         s32 result = check_manifest_dependency(requestedVersion, it->version);
         if (result == -1) {
-            tk::print("Invalid version range '%s' for mod '%s' requested by '%s'\n", requestedVersion, requestedMod, requester);
+            tk::fatal("Invalid version range '%s' for mod '%s' requested by '%s'\n", requestedVersion, requestedMod, requester);
             return false;
         } else if (result == -2) {
-            tk::print("Installed mod '%s' has invalid version string: '%s'\n", it->id, it->version);
+            tk::fatal("Installed mod '%s' has invalid version string: '%s'\n", it->id, it->version);
             return false;
         } else if (result == 0) {
-            tk::print("Version Mismatch for '%s': Needed %s, found %s\n", requestedMod, requestedVersion, it->version);
+            tk::fatal("Version Mismatch for '%s': Needed %s, found %s\n", requestedMod, requestedVersion, it->version);
             return false;
         }
     }
