@@ -6,3 +6,4 @@
 #include <telkin/Preprocessor.h>
 #include <telkin/Print.h>
 #include <telkin/Privilege.h>
+#include <telkin/Runtime.h>

@@ -42,7 +42,7 @@
           |__/                         /___/
 */
 
-#define TELKIN_VERSION "1.0.0"
+#define TELKIN_VERSION "1.0.1"
 
 namespace tk {
     struct RequestedDependency {
@@ -52,6 +52,7 @@ namespace tk {
     };
 
     std::vector<tk::ModInfo> sAllMods;
+    bool sIsCemu = false;
 
     bool loadRPL(
         const char* rplName,
@@ -124,13 +125,11 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, tk::writefunc_t writeFunc)
       return;
     initialized = true;
     
-    bool cemu = false;
-    
     if (writeFunc != nullptr) {
         tk::privilegedWrite = writeFunc;
     } else {
         tk::privilegedWrite = &directWrite;
-        cemu = true;
+        tk::sIsCemu = true;
     }
 
     OS_SPECIFICS->addr_OSDynLoad_Acquire = acquireAddr;
@@ -191,7 +190,7 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, tk::writefunc_t writeFunc)
     const u64 titleID = OSGetTitleID();
     u32 titleID_top = (titleID >> 32) & 0xFFFFFFFFU;
     u32 titleID_bot = titleID & 0xFFFFFFFFU;
-    if (!cemu) {
+    if (!tk::isCemu()) {
         titleID_top |= 0xC0000000U; //* tag for console
     }
     tk::print("Identified title id: %08X%08X\n", titleID_top, titleID_bot);
@@ -315,6 +314,10 @@ bool tk::isModLoaded(const char* id) {
     });
 }
 
+bool tk::isCemu() {
+    return tk::sIsCemu;
+}
+
 bool tk::loadRPL(
     const char* rplName,
     std::vector<HookEntry>& hookList, std::vector<startfunc_t>& startFuncs,
@@ -326,9 +329,19 @@ bool tk::loadRPL(
 ) {
     // Acquire RPL
     u32 rpl = 0;
-    if (OSDynLoad_Acquire(rplName, &rpl) != 0) {
-        tk::fatal("Unable to acquire RPL: %s\n", rplName);
-        return false;
+    if (tk::isCemu()) {
+        if (OSDynLoad_Acquire(rplName, &rpl) != 0) {
+            tk::fatal("Unable to acquire RPL: %s\n", rplName);
+            return false;
+        }
+    } else {
+        // console
+        static char rplPath[64]; // the "name" here can only be 64 chars wide in the loader
+        __os_snprintf(rplPath, sizeof(rplPath), "~/telkin/%016llX/code/%s", OSGetTitleID(), rplName);
+        if (OSDynLoad_Acquire(rplPath, &rpl) != 0) {
+            tk::fatal("Unable to acquire RPL: %s\n", rplPath);
+            return false;
+        }
     }
 
     getTitleID_t getTitleID = nullptr;

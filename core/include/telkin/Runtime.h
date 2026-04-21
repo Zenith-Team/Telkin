@@ -1,5 +1,12 @@
 #pragma once
 
+namespace tk {
+
+    [[nodiscard]]
+    bool isCemu();
+
+}
+
 #include <cafe.h>
 #include <cmath>
 #include <cctype>
