@@ -165,52 +165,6 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, tk::writefunc_t writeFunc)
 
     FSInit();
     tk::print("FS Inited\n");
-
-    // TODO: Can we move these to the stack?
-    
-    UniquePtrMEM<FSClient> client = sizeof(FSClient);
-    if (client.get() == nullptr) {
-        tk::print("Error: Unable to allocate FSClient\n");
-        return;
-    }
-    tk::print("FSClient allocated\n");
-
-    UniquePtrMEM<FSCmdBlock> cmd = sizeof(FSCmdBlock);
-    if (cmd.get() == nullptr) {
-        tk::print("Error: Unable to allocate FSCmdBlock\n");
-        return;
-    }
-    tk::print("FSCmdBlock allocated\n");
-
-    FSAddClient(client.get(), FS_RET_NO_ERROR);
-    tk::print("FSAddClient OK\n");
-    FSInitCmdBlock(cmd.get());
-    tk::print("FSInitCmd OK\n");
-
-    const u64 titleID = OSGetTitleID();
-    u32 titleID_top = (titleID >> 32) & 0xFFFFFFFFU;
-    u32 titleID_bot = titleID & 0xFFFFFFFFU;
-    if (!tk::isCemu()) {
-        titleID_top |= 0xC0000000U; //* tag for console
-    }
-    tk::print("Identified title id: %08X%08X\n", titleID_top, titleID_bot);
-
-    char coreDirPath[FS_MAX_ARGPATH_SIZE];
-    __os_snprintf(coreDirPath, sizeof(coreDirPath), "/vol/content/telkin/%08X%08X/core/", titleID_top, titleID_bot);
-    FSDirHandle coreDir;
-    if (FSOpenDir(client.get(), cmd.get(), coreDirPath, &coreDir, FS_RET_ALL_ERROR) != FS_STATUS_OK) {
-        tk::print("Couldn't find coremods path. Gracefully returning...\n");
-        return;
-    }
-    tk::print("FSOpenDir1 %s OK\n", coreDirPath);
-    
-    char modsDirPath[FS_MAX_ARGPATH_SIZE];
-    __os_snprintf(modsDirPath, sizeof(modsDirPath), "/vol/content/telkin/%08X%08X/mods/", titleID_top, titleID_bot);
-    FSDirHandle modsDir;
-    const bool hasStandardMods = FSOpenDir(client.get(), cmd.get(), modsDirPath, &modsDir, FS_RET_ALL_ERROR) == FS_STATUS_OK;
-    tk::print("FSOpenDir2 %s OK: %s\n", modsDirPath, hasStandardMods ? "Standard mods found" : "No standard mods present");
-    
-    // Read & load
     
     std::vector<tk::HookEntry> stdHooks;
     std::vector<tk::HookEntry> coreapiHooks;
@@ -218,66 +172,111 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, tk::writefunc_t writeFunc)
     std::vector<tk::startfunc_t> stdStartFuncs;
     std::vector<tk::RequestedDependency> allDeps;
     tk::startfunc_t coreapiStartFunc = nullptr;
+
+    {
+        UniquePtrMEM<FSClient> client = sizeof(FSClient);
+        if (client.get() == nullptr) {
+            tk::print("Error: Unable to allocate FSClient\n");
+            return;
+        }
+        tk::print("FSClient allocated\n");
     
-    bool success = true;
-    bool coreapiEncountered = false;
-    bool standardEncountered = false;
-    bool coremodEncountered = false;
-    u32 gameTitleID = static_cast<u32>(titleID);
-    FSDirEntry directoryEntry;
-    // Pass 1: Core mods
-    while (FSReadDir(client.get(), cmd.get(), coreDir, &directoryEntry, FS_RET_NO_ERROR) == FS_STATUS_OK) {
-        tk::print("Loading %s.rpl\n", directoryEntry.name);
-        
-        success = tk::loadRPL(
-            directoryEntry.name,
-            stdHooks, stdStartFuncs,
-            gameTitleID,
-            coreapiEncountered, coreapiHooks, coreapiStartFunc,
-            standardEncountered, coremodEncountered,
-            allHooks,
-            tk::sAllMods, allDeps
-        );
-        
-        if (!success) {
-            tk::fatal("RPL failed to load, aborting inject!\n");
-            break;
+        UniquePtrMEM<FSCmdBlock> cmd = sizeof(FSCmdBlock);
+        if (cmd.get() == nullptr) {
+            tk::print("Error: Unable to allocate FSCmdBlock\n");
+            return;
         }
-    }
-    // Pass 2: Standard mods
-    while (hasStandardMods && FSReadDir(client.get(), cmd.get(), modsDir, &directoryEntry, FS_RET_NO_ERROR) == FS_STATUS_OK) {
-        tk::print("Loading %s.rpl\n", directoryEntry.name);
-        
-        success = tk::loadRPL(
-            directoryEntry.name,
-            stdHooks, stdStartFuncs,
-            gameTitleID,
-            coreapiEncountered, coreapiHooks, coreapiStartFunc,
-            standardEncountered, coremodEncountered,
-            allHooks,
-            tk::sAllMods, allDeps
-        );
-        
-        if (!success) {
-            tk::fatal("RPL failed to load, aborting inject!\n");
-            break;
+        tk::print("FSCmdBlock allocated\n");
+    
+        FSAddClient(client.get(), FS_RET_NO_ERROR);
+        tk::print("FSAddClient OK\n");
+        FSInitCmdBlock(cmd.get());
+        tk::print("FSInitCmd OK\n");
+    
+        const u64 titleID = OSGetTitleID();
+        u32 titleID_top = (titleID >> 32) & 0xFFFFFFFFU;
+        u32 titleID_bot = titleID & 0xFFFFFFFFU;
+        if (!tk::isCemu()) {
+            titleID_top |= 0xC0000000U; //* tag for console
         }
-    }
-
-    if (standardEncountered == true && coreapiEncountered == false) {
-        tk::fatal("Attempted to load mods without a CoreAPI. Fix your dependencies. Aborting inject!\n");
-        success = false;
-    }
-
-    if (coreapiEncountered && coremodEncountered) {
-        tk::fatal("Cannot load Core Mods when a CoreAPI is available. Please update your mod or remove the CoreAPI.\n");
-        success = false;
-    }
-
-    if (!success || !tk::validateDependencies(allDeps) || !tk::validateHooks(allHooks)) {
-        tk::fatal("Something went wrong. You can ask for help in our Discord server: https://go.nsmbu.net/discord or email: contact@nsmbu.net\n");
-
-        return; // no changes to game
+        tk::print("Identified title id: %08X%08X\n", titleID_top, titleID_bot);
+    
+        char coreDirPath[FS_MAX_ARGPATH_SIZE];
+        __os_snprintf(coreDirPath, sizeof(coreDirPath), "/vol/content/telkin/%08X%08X/core/", titleID_top, titleID_bot);
+        FSDirHandle coreDir;
+        if (FSOpenDir(client.get(), cmd.get(), coreDirPath, &coreDir, FS_RET_ALL_ERROR) != FS_STATUS_OK) {
+            tk::print("Couldn't find coremods path. Gracefully returning...\n");
+            return;
+        }
+        tk::print("FSOpenDir1 %s OK\n", coreDirPath);
+        
+        char modsDirPath[FS_MAX_ARGPATH_SIZE];
+        __os_snprintf(modsDirPath, sizeof(modsDirPath), "/vol/content/telkin/%08X%08X/mods/", titleID_top, titleID_bot);
+        FSDirHandle modsDir;
+        const bool hasStandardMods = FSOpenDir(client.get(), cmd.get(), modsDirPath, &modsDir, FS_RET_ALL_ERROR) == FS_STATUS_OK;
+        tk::print("FSOpenDir2 %s OK: %s\n", modsDirPath, hasStandardMods ? "Standard mods found" : "No standard mods present");
+        
+        // Read & load
+        bool success = true;
+        bool coreapiEncountered = false;
+        bool standardEncountered = false;
+        bool coremodEncountered = false;
+        u32 gameTitleID = static_cast<u32>(titleID);
+        FSDirEntry directoryEntry;
+        // Pass 1: Core mods
+        while (FSReadDir(client.get(), cmd.get(), coreDir, &directoryEntry, FS_RET_NO_ERROR) == FS_STATUS_OK) {
+            tk::print("Loading %s.rpl\n", directoryEntry.name);
+            
+            success = tk::loadRPL(
+                directoryEntry.name,
+                stdHooks, stdStartFuncs,
+                gameTitleID,
+                coreapiEncountered, coreapiHooks, coreapiStartFunc,
+                standardEncountered, coremodEncountered,
+                allHooks,
+                tk::sAllMods, allDeps
+            );
+            
+            if (!success) {
+                tk::fatal("RPL failed to load, aborting inject!\n");
+                break;
+            }
+        }
+        // Pass 2: Standard mods
+        while (hasStandardMods && FSReadDir(client.get(), cmd.get(), modsDir, &directoryEntry, FS_RET_NO_ERROR) == FS_STATUS_OK) {
+            tk::print("Loading %s.rpl\n", directoryEntry.name);
+            
+            success = tk::loadRPL(
+                directoryEntry.name,
+                stdHooks, stdStartFuncs,
+                gameTitleID,
+                coreapiEncountered, coreapiHooks, coreapiStartFunc,
+                standardEncountered, coremodEncountered,
+                allHooks,
+                tk::sAllMods, allDeps
+            );
+            
+            if (!success) {
+                tk::fatal("RPL failed to load, aborting inject!\n");
+                break;
+            }
+        }
+    
+        if (standardEncountered == true && coreapiEncountered == false) {
+            tk::fatal("Attempted to load mods without a CoreAPI. Fix your dependencies. Aborting inject!\n");
+            success = false;
+        }
+    
+        if (coreapiEncountered && coremodEncountered) {
+            tk::fatal("Cannot load Core Mods when a CoreAPI is available. Please update your mod or remove the CoreAPI.\n");
+            success = false;
+        }
+    
+        if (!success || !tk::validateDependencies(allDeps) || !tk::validateHooks(allHooks)) {
+            tk::fatal("Something went wrong. You can ask for help in our Discord server: https://go.nsmbu.net/discord or email: contact@nsmbu.net\n");
+    
+            return; // no changes to game
+        }
     }
 
     // here's the magic:
