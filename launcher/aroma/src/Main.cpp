@@ -12,12 +12,13 @@
 
 #include <coreinit/cache.h>
 #include <coreinit/dynload.h>
+#include <coreinit/internal.h>
 #include <coreinit/title.h>
 #include <coreinit/memorymap.h>
 
 WUPS_PLUGIN_NAME("Telkin RPL Loader");
 WUPS_PLUGIN_DESCRIPTION("A dynamic Wii U mod loader.");
-WUPS_PLUGIN_VERSION("prerelease");
+WUPS_PLUGIN_VERSION("1.0.0");
 WUPS_PLUGIN_AUTHOR("techmuse, Luminyx");
 WUPS_PLUGIN_LICENSE("MPL-2.0");
 
@@ -44,7 +45,10 @@ void TelkinBootstrap() {
     using Telkin_init_t = void (*)(OSDynLoad_Acquire_t acquireAddr, OSDynLoad_Export_t exportAddr, Telkin_writeFunc_t writeFunc);
     Telkin_init_t Telkin_init;
 
-    OSDynLoad_Error err = OSDynLoad_Acquire("Telkin.rpl", &TelkinRPLHandle); // load RPL from SD card
+    char cpy[64] = {};
+    __os_snprintf(cpy, sizeof(cpy), "~/telkin/%016llX/code/Telkin.rpl", OSGetTitleID());
+
+    OSDynLoad_Error err = OSDynLoad_Acquire(cpy, &TelkinRPLHandle); // load RPL from SD card
     if (err != OS_DYNLOAD_OK) {
         WHBLogPrintf("Couldn't load Telkin.rpl! Err code: %08X\n", err);
         return;
@@ -87,12 +91,16 @@ void RedirectContentDir() {
     }
 }
 
+bool sInitDone = false;
+
 INITIALIZE_PLUGIN() {
     ContentRedirectionStatus error;
     if ((error = ContentRedirection_InitLibrary()) != CONTENT_REDIRECTION_RESULT_SUCCESS) {
         WHBLogPrintf("Failed to init ContentRedirection. Error %s %d", ContentRedirection_GetStatusStr(error), error);
         OSFatal("Failed to init ContentRedirection.");
     }
+
+    sInitDone = true;
 }
 
 ON_APPLICATION_START() {
@@ -120,3 +128,53 @@ ON_APPLICATION_ENDS() {
     OSDynLoad_Release(TelkinRPLHandle);
     TelkinRPLHandle = nullptr;
 }
+
+DECL_FUNCTION(uint32_t, __OSDynLoad_InternalAcquire, char *name, void **out, uint32_t u1, uint32_t u2, uint32_t u3) {
+    uint32_t res = real___OSDynLoad_InternalAcquire(name, out, u1, u2, u3);
+    // Make sure the plugin is properly initialized before calling custom code
+    if (!sInitDone)
+        return res;
+
+    if (res == 0)
+        return res;
+
+    // Only for RPL being acquired, so we skip it
+    if (strncmp("~|telkin", name, strlen("~|telkin")) == 0)
+        return res;
+
+    char cpy[64] = {};
+    __os_snprintf(cpy, sizeof(cpy), "~|telkin|%016llX|code|%s", OSGetTitleID(), name);
+
+    res = real___OSDynLoad_InternalAcquire(cpy, out, u1, u2, u3);
+
+    if (res == 0)
+        return res;
+    else
+        return real___OSDynLoad_InternalAcquire(name, out, u1, u2, u3);
+}
+
+using LoaderLogFn = void (*)(const char* fmt, ...);
+static LoaderLogFn LoaderLog = reinterpret_cast<LoaderLogFn>(0x010028d0);
+
+using __loader_snprintf_t = int (*)(char *buf, size_t n, const char *format, ...);
+static __loader_snprintf_t __loader_snprintf = reinterpret_cast<__loader_snprintf_t>(0x01003df8);
+
+DECL_FUNCTION(void*, LiFindRPLByName, char* name) {
+    char redirected[64] = {};
+
+    __loader_snprintf(redirected, sizeof(redirected), "~|telkin|%016llX|code|%s", OSGetTitleID(), name);
+
+   // LoaderLog("Trying to find %s\n", redirected);
+
+    auto ret = real_LiFindRPLByName(redirected);
+    if (ret) {
+       // LoaderLog("Ret RPL: %s\n", ret->moduleNameBuffer);
+        return ret;
+    }
+
+    return real_LiFindRPLByName(name);
+}
+
+
+WUPS_MUST_REPLACE_PHYSICAL(LiFindRPLByName, 0x32004bc4, 0x01004bc4);
+WUPS_MUST_REPLACE_PHYSICAL(__OSDynLoad_InternalAcquire, 0x3201C400 + 0x0cc54, 0x101C400 + 0x0cc54);
