@@ -18,7 +18,7 @@
 
 WUPS_PLUGIN_NAME("Telkin RPL Loader");
 WUPS_PLUGIN_DESCRIPTION("A dynamic Wii U mod loader.");
-WUPS_PLUGIN_VERSION("1.0.0");
+WUPS_PLUGIN_VERSION("1.0.1");
 WUPS_PLUGIN_AUTHOR("techmuse, Luminyx");
 WUPS_PLUGIN_LICENSE("MPL-2.0");
 
