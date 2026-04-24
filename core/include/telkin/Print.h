@@ -42,6 +42,12 @@ namespace tk {
     }
     
     template <typename... Args>
+    void println(internal::LogFormat format, Args&&... args) {
+        tk::print(format, std::forward<Args>(args)...);
+        OSReport("\n");
+    }
+    
+    template <typename... Args>
     void fatal(internal::LogFormat format, Args&&... args) {
         const auto& fmt = format.fmt;
         
