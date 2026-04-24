@@ -10,13 +10,13 @@ bool tk::applyBranchHook(const tk::BranchHook* hook) {
     u32 instr = (reinterpret_cast<u32>(hook->target) - addr) & 0x03FFFFFC;
     const s32 offset = reinterpret_cast<u32>(hook->target) - addr;
     if (offset > 0x01FFFFFC || offset < -0x02000000) {
-        tk::print("Hook target out of range (diff: %d)\n", offset);
+        tk::println("Hook target out of range (diff: %d)", offset);
         return false; 
     }
 
     switch (hook->type) {
         default: {
-            tk::print("Invalid hook type for hook at: 0x%08X\n", addr);
+            tk::println("Invalid hook type for hook at: 0x%08X", addr);
             return false;
         }
 
@@ -31,7 +31,7 @@ bool tk::applyBranchHook(const tk::BranchHook* hook) {
         }
     }
 
-    tk::print("Writing branch hook: 0x%08X to 0x%08X\n", instr, addr);
+    tk::println("Writing branch hook: 0x%08X to 0x%08X", instr, addr);
     
     tk::privilegedWrite(hook->source, &instr, sizeof(u32));
     
@@ -45,7 +45,7 @@ bool tk::applyBranchHook(const tk::BranchHook* hook) {
 bool tk::applyPointerHook(const tk::PointerHook* hook) {
     const u32 addr = reinterpret_cast<u32>(hook->source);
 
-    tk::print("Writing pointer hook: 0x%08X to 0x%08X\n", addr, hook->target);
+    tk::println("Writing pointer hook: 0x%08X to 0x%08X", addr, hook->target);
 
     tk::privilegedWrite(hook->source, (void*)&hook->target, sizeof(u32));
 
@@ -58,7 +58,7 @@ bool tk::applyPatchHook(const tk::PatchHook* patch) {
     const u32 addr = reinterpret_cast<u32>(patch->addr);
     const u32 totalSize = patch->count * (patch->dataSize / 8);
 
-    tk::print("Applying %d-byte patch from 0x%08X to 0x%08X\n", totalSize, addr, addr + totalSize);
+    tk::println("Applying %d-byte patch from 0x%08X to 0x%08X", totalSize, addr, addr + totalSize);
 
     tk::privilegedWrite(patch->addr, (void*)patch->data, totalSize);
 
@@ -76,7 +76,7 @@ bool tk::readBranchHook(u32 rpl, void* hookPtr, std::vector<HookEntry>& list, st
     u32 target = 0;
     s32 err = OSDynLoad_FindExport(rpl, false, hook->target, &target);
     if (err != 0 || target == 0 || target == 0xFFFFFFFF) {
-        tk::print("Could not find branch hook target: %s for patch at: 0x%08X\n", hook->target, addr);
+        tk::println("Could not find branch hook target: %s for patch at: 0x%08X", hook->target, addr);
         return false;
     }
 
@@ -95,7 +95,7 @@ bool tk::readPointerHook(u32 rpl, void* hookPtr, std::vector<HookEntry>& list, s
     u32 target = 0;
     s32 err = OSDynLoad_FindExport(rpl, hook->isData, hook->target, &target);
     if (err != 0 || target == 0 || target == 0xFFFFFFFF) {
-        tk::print("Could not find pointer hook target: %s for patch at: 0x%08X\n", hook->target, addr);
+        tk::println("Could not find pointer hook target: %s for patch at: 0x%08X", hook->target, addr);
         return false;
     }
 
@@ -114,7 +114,7 @@ bool tk::readPatchHook(void* hookPtr, std::vector<HookEntry>& list, std::vector<
 
     switch (patch->dataSize) {
         default: {
-            tk::print("Invalid patch unit size %u at addr 0x%08X\n", patch->dataSize, addr);
+            tk::println("Invalid patch unit size %u at addr 0x%08X", patch->dataSize, addr);
             return false;
         }
 

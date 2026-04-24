@@ -53,6 +53,7 @@ namespace tk {
         
         OSReport("[%s:%d] ERROR: ", format.file, format.line);
         OSReport(fmt, std::forward<Args>(args)...);
+        OSReport("\n"); // we don't expect anything else afterwards
         
         OSFatal(fmt); // TODO: When line wrapping works, format everything and print that
     }
