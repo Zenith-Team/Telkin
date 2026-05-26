@@ -45,7 +45,7 @@ void TelkinBootstrap() {
     using Telkin_init_t = void (*)(OSDynLoad_Acquire_t acquireAddr, OSDynLoad_Export_t exportAddr, Telkin_writeFunc_t writeFunc);
     Telkin_init_t Telkin_init;
 
-    char cpy[64] = {};
+    char cpy[64] = { };
     __os_snprintf(cpy, sizeof(cpy), "~/telkin/%016llX/code/Telkin.rpl", OSGetTitleID());
 
     OSDynLoad_Error err = OSDynLoad_Acquire(cpy, &TelkinRPLHandle); // load RPL from SD card
