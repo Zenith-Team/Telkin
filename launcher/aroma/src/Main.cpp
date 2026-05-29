@@ -160,6 +160,9 @@ using __loader_snprintf_t = int (*)(char *buf, size_t n, const char *format, ...
 static __loader_snprintf_t __loader_snprintf = reinterpret_cast<__loader_snprintf_t>(0x01003df8);
 
 DECL_FUNCTION(void*, LiFindRPLByName, char* name) {
+    if (!sInitDone)
+        return real_LiFindRPLByName(name);
+        
     char redirected[64] = {};
 
     __loader_snprintf(redirected, sizeof(redirected), "~|telkin|%016llX|code|%s", OSGetTitleID(), name);
