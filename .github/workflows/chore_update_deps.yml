@@ -1,0 +1,33 @@
+name: "Chore: Update deps"
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-deps:
+    if: github.repository == 'Zenith-Team/Telkin'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Update libs
+        run: git submodule update --remote core/libs/DynamicLibs
+
+      - name: Commit changes
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "🤖 (chore): Update deps"
+          title: "🤖 (chore): Update deps"
+          branch: "bot-update-deps"
+          delete-branch: true
+          committer: "GitHub Actions <actions@github.com>"
+          author: "GitHub Actions <actions@github.com>"
