@@ -55,6 +55,9 @@ namespace tk {
         OSReport(fmt, std::forward<Args>(args)...);
         OSReport("\n"); // we don't expect anything else afterwards
         
-        OSFatal(fmt); // TODO: When line wrapping works, format everything and print that
+        static char buf[512];
+        
+        __os_snprintf(buf, sizeof(buf), fmt, std::forward<Args>(args)...);
+        OSFatal(buf);
     }
 }
