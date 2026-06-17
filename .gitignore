@@ -15,3 +15,5 @@
 *.wps
 compile_commands.json
 .DS_Store
+docs/html
+docs/latex

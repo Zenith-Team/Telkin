@@ -1,12 +1,12 @@
 <img alt="banner" src="https://github.com/user-attachments/assets/ad115c21-629c-41f0-9e2f-35699e8909dc" />
 <div align="center">
-  <img alt="wiiu" height="56" src="https://github.com/user-attachments/assets/8afc18be-3148-4c23-8d14-9532606f103f">
-  <a href="https://go.nsmbu.net/discord">
-    <img alt="discord" height="56" src="https://github.com/user-attachments/assets/4f7029c3-2eec-4ea4-b832-1c83c89ff663">
-  </a>
-  <a href="https://zenith.nsmbu.net/wiki/Telkin">
-    <img alt="docs" height="56" src="https://github.com/user-attachments/assets/f3cf0ed1-75fe-472f-8ec7-4e6ce971f8bf">
-  </a>
+    <img alt="wiiu" height="56" src="https://github.com/user-attachments/assets/8afc18be-3148-4c23-8d14-9532606f103f">
+    <a href="https://go.nsmbu.net/discord">
+        <img alt="discord" height="56" src="https://github.com/user-attachments/assets/4f7029c3-2eec-4ea4-b832-1c83c89ff663">
+    </a>
+    <a href="https://docs.zenith.red/telkin">
+        <img alt="docs" height="56" src="https://github.com/user-attachments/assets/f3cf0ed1-75fe-472f-8ec7-4e6ce971f8bf">
+    </a>
 </div>
 
 ## Overview
