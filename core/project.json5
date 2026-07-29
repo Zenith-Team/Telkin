@@ -2,7 +2,7 @@
     WURPLSVersion: "1.0",
     
     Name: "Telkin",
-    Version: "1.0.1",
+    Version: "1.0.5",
     Type: "Special",
     Freestanding: true,
     Initless: true,
