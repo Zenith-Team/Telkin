@@ -42,7 +42,7 @@
           |__/                         /___/
 */
 
-#define TELKIN_VERSION "1.0.1"
+#define TELKIN_VERSION "1.0.6"
 
 namespace tk {
     struct RequestedDependency {
