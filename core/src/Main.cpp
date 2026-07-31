@@ -42,8 +42,6 @@
           |__/                         /___/
 */
 
-#define TELKIN_VERSION "1.0.6"
-
 namespace tk {
     struct RequestedDependency {
         const char* requester;
@@ -160,8 +158,8 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, tk::writefunc_t writeFunc)
     InitVPadFunctionPointers();
     InitZlibFunctionPointers();
 
-    tk::println("Telkin v" TELKIN_VERSION " by Zenith");
-    tk::sAllMods.emplace_back("telkin", TELKIN_VERSION);
+    tk::println("Telkin v" MOD_VERSION " by Zenith");
+    tk::sAllMods.emplace_back("telkin", MOD_VERSION);
 
     FSInit();
     tk::println("FS Inited");
