@@ -278,8 +278,9 @@ extern "C" void init(u32 acquireAddr, u32 exportAddr, tk::writefunc_t writeFunc)
     }
 
     // here's the magic:
-    tk::applyHooks(coreapiHooks);
-    tk::applyHooks(stdHooks);
+    if (!(tk::applyHooks(coreapiHooks) && tk::applyHooks(stdHooks))) {
+        tk::fatal("Something went wrong. You can ask for help in our Discord server: https://go.nsmbu.net/discord or email: contact@nsmbu.net");
+    }
     if (coreapiStartFunc) {
         coreapiStartFunc(
             OS_SPECIFICS->addr_OSDynLoad_Acquire,
