@@ -517,21 +517,21 @@ bool tk::loadRPL(
     for (GenericHook* hook = hooksBegin; hook != hooksEnd; hook++) {
         switch (hook->magic) {
             case tk::DataMagic::BranchHook: {
-                if (!tk::readBranchHook(rpl, hook, *outputHookList, allHooks))
+                if (!tk::readBranchHook(rpl, hook, *outputHookList, allHooks, modID))
                     return false;
 
                 break;
             }
 
             case tk::DataMagic::PointerHook: {
-                if (!tk::readPointerHook(rpl, hook, *outputHookList, allHooks))
+                if (!tk::readPointerHook(rpl, hook, *outputHookList, allHooks, modID))
                     return false;
 
                 break;
             }
 
             case tk::DataMagic::PatchHook: {
-                if (!tk::readPatchHook(hook, *outputHookList, allHooks))
+                if (!tk::readPatchHook(hook, *outputHookList, allHooks, modID))
                     return false;
 
                 break;
@@ -586,6 +586,19 @@ bool tk::applyHooks(const std::vector<HookEntry>& hooks) {
     return true;
 }
 
+static const char* hookType(const tk::GenericHook* hook) {
+    switch (hook->magic) {
+        case tk::DataMagic::BranchHook:
+            return "BranchHook";
+        case tk::DataMagic::PointerHook:
+            return "PointerHook";
+        case tk::DataMagic::PatchHook:
+            return "PatchHook";
+        default:
+            return "UnknownHook";
+    }
+}
+
 bool tk::validateHooks(std::vector<HookEntry>& hooks) {
     tk::println("Validating hooks...");
 
@@ -598,12 +611,25 @@ bool tk::validateHooks(std::vector<HookEntry>& hooks) {
         return lhs.startAddr < rhs.startAddr;
     });
 
+    bool hasConflict = false;
     for (size_t i = 1; i < hooks.size(); i++) {
-        if (hooks.data()[i].startAddr < hooks.data()[i - 1].endAddr) {
-            // TODO: Better diagnostic here with mod blame and addrs/types
-            tk::fatal("MOD INCOMPATIBILITY: Overlapping hooks found!");
-            return false;
+        for (size_t j = 0; j < i; j++) {
+            const HookEntry& first = hooks[j];
+            const HookEntry& second = hooks[i];
+            if (second.startAddr < first.endAddr) {
+                hasConflict = true;
+                tk::println(
+                    "Overlapping hooks: %s %s [0x%08X, 0x%08X) and %s %s [0x%08X, 0x%08X)",
+                    first.modID, hookType(first.hook), first.startAddr, first.endAddr,
+                    second.modID, hookType(second.hook), second.startAddr, second.endAddr
+                );
+            }
         }
+    }
+
+    if (hasConflict) {
+        tk::fatal("MOD INCOMPATIBILITY: Overlapping hooks found! See diagnostics above.");
+        return false;
     }
 
     tk::println("No hook conflicts found :)");

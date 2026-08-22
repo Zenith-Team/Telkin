@@ -69,7 +69,7 @@ bool tk::applyPatchHook(const tk::PatchHook* patch) {
     return true;
 }
 
-bool tk::readBranchHook(u32 rpl, void* hookPtr, std::vector<HookEntry>& list, std::vector<HookEntry>& listFull) {
+bool tk::readBranchHook(u32 rpl, void* hookPtr, std::vector<HookEntry>& list, std::vector<HookEntry>& listFull, const char* modID) {
     tk::BranchHook* hook = reinterpret_cast<tk::BranchHook*>(hookPtr);
     const u32 addr = reinterpret_cast<u32>(hook->source);
 
@@ -82,13 +82,13 @@ bool tk::readBranchHook(u32 rpl, void* hookPtr, std::vector<HookEntry>& list, st
 
     hook->target = reinterpret_cast<const char*>(target); //* We are resolving this string early while we still have access to the RPL and reusing the pointer field for the final address
     
-    list.emplace_back((GenericHook*)hook, addr, addr + sizeof(u32));
-    listFull.emplace_back((GenericHook*)hook, addr, addr + sizeof(u32));
+    list.emplace_back((GenericHook*)hook, addr, addr + sizeof(u32), modID);
+    listFull.emplace_back((GenericHook*)hook, addr, addr + sizeof(u32), modID);
 
     return true;
 }
 
-bool tk::readPointerHook(u32 rpl, void* hookPtr, std::vector<HookEntry>& list, std::vector<HookEntry>& listFull) {
+bool tk::readPointerHook(u32 rpl, void* hookPtr, std::vector<HookEntry>& list, std::vector<HookEntry>& listFull, const char* modID) {
     tk::PointerHook* hook = reinterpret_cast<tk::PointerHook*>(hookPtr);
     const u32 addr = reinterpret_cast<u32>(hook->source);
 
@@ -101,13 +101,13 @@ bool tk::readPointerHook(u32 rpl, void* hookPtr, std::vector<HookEntry>& list, s
 
     hook->target = reinterpret_cast<const char*>(target); //* We are resolving this string early while we still have access to the RPL and reusing the pointer field for the final address
 
-    list.emplace_back((GenericHook*)hook, addr, addr + sizeof(void*));
-    listFull.emplace_back((GenericHook*)hook, addr, addr + sizeof(void*));
+    list.emplace_back((GenericHook*)hook, addr, addr + sizeof(void*), modID);
+    listFull.emplace_back((GenericHook*)hook, addr, addr + sizeof(void*), modID);
 
     return true;
 }
 
-bool tk::readPatchHook(void* hookPtr, std::vector<HookEntry>& list, std::vector<HookEntry>& listFull) {
+bool tk::readPatchHook(void* hookPtr, std::vector<HookEntry>& list, std::vector<HookEntry>& listFull, const char* modID) {
     const tk::PatchHook* patch = reinterpret_cast<tk::PatchHook*>(hookPtr);
     const u32 addr = reinterpret_cast<u32>(patch->addr);
     const u32 totalSize = patch->count * (patch->dataSize / 8);
@@ -125,8 +125,8 @@ bool tk::readPatchHook(void* hookPtr, std::vector<HookEntry>& list, std::vector<
             break;
     }
     
-    list.emplace_back((GenericHook*)patch, addr, addr + totalSize);
-    listFull.emplace_back((GenericHook*)patch, addr, addr + totalSize);
+    list.emplace_back((GenericHook*)patch, addr, addr + totalSize, modID);
+    listFull.emplace_back((GenericHook*)patch, addr, addr + totalSize, modID);
 
     return true;
 }
