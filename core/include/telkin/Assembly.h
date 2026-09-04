@@ -5,19 +5,11 @@
 
 // thx to mkwcat/nsmbw-project for some of these
 
-#ifdef TELKIN_NO_REGISTERS
-    #define TELKIN_REGISTERS_WARNING()
-#else
-    #define TELKIN_REGISTERS_WARNING() _Pragma("message \"WARNING: TELKIN_REGISTERS was not defined. It is recommended to globally define TELKIN_NO_REGISTERS if this was intentional\"")
+#if defined(TELKIN_NO_REGISTERS) || defined(TELKIN_REGISTERS)
+#error The TELKIN_REGISTERS macro system is deprecated. Instead, simply include telkin/DefineRegisters.h or telkin/UndefineRegisters.h throughout your file as needed.
 #endif
 
-#ifdef TELKIN_REGISTERS
-    #define tAssembly(...) __attribute__((naked)) __attribute__((__noinline__)) { __asm__ volatile (PP_STR_VAL(__VA_ARGS__)); }
-#else
-    #define tAssembly(...) \
-        TELKIN_REGISTERS_WARNING() \
-        __attribute__((naked)) __attribute__((__noinline__)) { __asm__ volatile (PP_STR_VAL(__VA_ARGS__)); }
-#endif
+#define tAssembly(...) __attribute__((naked)) __attribute__((__noinline__)) { __asm__ volatile (PP_STR_VAL(__VA_ARGS__)); }
 
 #ifdef __clangd__
     #define tRegSave __attribute__(())
@@ -742,10 +734,6 @@ namespace tk::ppc {
     consteval u32 ps_cmpu1(CR cr, F fa, F fb) { return internal::X_form(4, internal::cr_field(cr), u8(fa), u8(fb), 64, false); }
     consteval u32 dcbz_l(R ra, R rb) { return internal::X_form(4, 0, u8(ra), u8(rb), 1014, false); }
 }
-
-#ifdef TELKIN_REGISTERS
-#include <telkin/DefineRegisters.h>
-#endif
 
 // It's recommended to use the tRegSave attribute directly in C++ instead of the below macros
 #define tSaveVolatileRegisters  \
