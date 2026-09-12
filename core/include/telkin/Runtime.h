@@ -373,8 +373,8 @@ extern "C" void abort() {
 #endif
 
 #ifdef TK_IMPL_PRINTF
-#define TELKIN_REGISTERS
 #include <telkin/Assembly.h>
+#include <telkin/DefineRegisters.h>
 extern "C" int printf(const char* format, ...) tAssembly(
     // r2 is persistent/unused
     lis r2, OSReport@ha;
@@ -386,6 +386,7 @@ extern "C" int printf(const char* format, ...) tAssembly(
     li r3, 0;
     blr;
 )
+#include <telkin/UndefineRegisters.h>
 #endif
 
 #ifdef TK_IMPL_ISLOWER
