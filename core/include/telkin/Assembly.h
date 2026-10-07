@@ -19,7 +19,7 @@
 
 namespace tk::ppc {
 
-    enum class GPR : u8 {
+    enum GPR : u8 {
         r0,  r1,  r2,  r3,  r4,
         r5,  r6,  r7,  r8,  r9,
         r10, r11, r12, r13, r14,
@@ -31,7 +31,7 @@ namespace tk::ppc {
         sp = r1
     };
     
-    enum class FPR : u8 {
+    enum FPR : u8 {
         f0,  f1,  f2,  f3,  f4,
         f5,  f6,  f7,  f8,  f9,
         f10, f11, f12, f13, f14,
@@ -41,7 +41,7 @@ namespace tk::ppc {
         f30, f31
     };
     
-    enum class CR : u8 {
+    enum CR : u8 {
         cr0, cr1, cr2, cr3, cr4, cr5, cr6, cr7
     };
     
