@@ -14,7 +14,7 @@ static void checkPin(const u64* pin) {
     const u32 pin_top = (*pin >> 32) & 0xFFFFFFFFU;
     const u32 pin_bot = *pin & 0xFFFFFFFFU;
     if (*pin != titleID) {
-        tk::fatal("ERROR: Found hook pinned to titleid %08X%08X running on %08X%08X! Use #ifdef statements to exclude pinned hooks from other builds.", pin_top, pin_bot, titleID_top, titleID_bot);
+        tk::fatal("Found hook pinned to titleid %08X%08X running on %08X%08X! Use #ifdef statements to exclude pinned hooks from other builds.", pin_top, pin_bot, titleID_top, titleID_bot);
     }
 }
 
