@@ -4,7 +4,23 @@
 
 #include <dynamic_libs/os_functions.h>
 
+static void checkPin(const u64* pin) {
+    if (pin == nullptr)
+        return;
+    
+    const u64 titleID = OSGetTitleID();
+    const u32 titleID_top = (titleID >> 32) & 0xFFFFFFFFU;
+    const u32 titleID_bot = titleID & 0xFFFFFFFFU;
+    const u32 pin_top = (*pin >> 32) & 0xFFFFFFFFU;
+    const u32 pin_bot = *pin & 0xFFFFFFFFU;
+    if (*pin != titleID) {
+        tk::fatal("ERROR: Found hook pinned to titleid %08X%08X running on %08X%08X! Use #ifdef statements to exclude pinned hooks from other builds.", pin_top, pin_bot, titleID_top, titleID_bot);
+    }
+}
+
 bool tk::applyBranchHook(const tk::BranchHook* hook) {
+    checkPin(hook->titleID);
+    
     const u32 addr = reinterpret_cast<u32>(hook->source);
 
     u32 instr = (reinterpret_cast<u32>(hook->target) - addr) & 0x03FFFFFC;
@@ -43,6 +59,8 @@ bool tk::applyBranchHook(const tk::BranchHook* hook) {
 }
 
 bool tk::applyPointerHook(const tk::PointerHook* hook) {
+    checkPin(hook->titleID);
+    
     const u32 addr = reinterpret_cast<u32>(hook->source);
 
     tk::println("Writing pointer hook: 0x%08X to 0x%08X", addr, hook->target);
@@ -55,6 +73,8 @@ bool tk::applyPointerHook(const tk::PointerHook* hook) {
 }
 
 bool tk::applyPatchHook(const tk::PatchHook* patch) {
+    checkPin(patch->titleID);
+    
     const u32 addr = reinterpret_cast<u32>(patch->addr);
     const u32 totalSize = patch->count * (patch->dataSize / 8);
 
