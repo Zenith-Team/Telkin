@@ -208,7 +208,7 @@ typedef union {
 } udwords;
 
 
-du_int __udivmoddi4(du_int a, du_int b, du_int *rem) {
+extern "C" du_int __udivmoddi4(du_int a, du_int b, du_int *rem) {
     const unsigned n_uword_bits = sizeof(su_int) * CHAR_BIT;
     const unsigned n_udword_bits = sizeof(du_int) * CHAR_BIT;
     udwords n;
@@ -379,11 +379,11 @@ du_int __udivmoddi4(du_int a, du_int b, du_int *rem) {
     return q.all;
 }
 
-u64 __udivdi3(u64 a, u64 b) {
+extern "C" u64 __udivdi3(u64 a, u64 b) {
     return __udivmoddi4(a, b, 0);
 }
 
-u64 __divdi3(di_int a, di_int b) {
+extern "C" s64 __divdi3(di_int a, di_int b) {
     const int bits_in_dword_m1 = (int)(sizeof(di_int) * CHAR_BIT) - 1;
     di_int s_a = a >> bits_in_dword_m1;                   // s_a = a < 0 ? -1 : 0
     di_int s_b = b >> bits_in_dword_m1;                   // s_b = b < 0 ? -1 : 0
@@ -393,13 +393,13 @@ u64 __divdi3(di_int a, di_int b) {
     return (__udivmoddi4(a, b, (du_int *)0) ^ s_a) - s_a; // negate if s_a == -1
 }
 
-du_int __umoddi3(du_int a, du_int b) {
+extern "C" u64 __umoddi3(du_int a, du_int b) {
     du_int r;
     __udivmoddi4(a, b, &r);
     return r;
 }
 
-du_int __moddi3(di_int a, di_int b) {
+extern "C" s64 __moddi3(di_int a, di_int b) {
     const int bits_in_dword_m1 = (int)(sizeof(di_int) * CHAR_BIT) - 1;
     di_int s = b >> bits_in_dword_m1; // s = b < 0 ? -1 : 0
     b = (b ^ s) - s;                  // negate if s == -1
