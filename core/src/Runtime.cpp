@@ -383,14 +383,14 @@ extern "C" u64 __udivdi3(u64 a, u64 b) {
     return __udivmoddi4(a, b, 0);
 }
 
-extern "C" s64 __divdi3(di_int a, di_int b) {
+extern "C" di_int __divdi3(di_int a, di_int b) {
     const int bits_in_dword_m1 = (int)(sizeof(di_int) * CHAR_BIT) - 1;
     di_int s_a = a >> bits_in_dword_m1;                   // s_a = a < 0 ? -1 : 0
     di_int s_b = b >> bits_in_dword_m1;                   // s_b = b < 0 ? -1 : 0
-    a = (a ^ s_a) - s_a;                                  // negate if s_a == -1
-    b = (b ^ s_b) - s_b;                                  // negate if s_b == -1
-    s_a ^= s_b;                                           // sign of quotient
-    return (__udivmoddi4(a, b, (du_int *)0) ^ s_a) - s_a; // negate if s_a == -1
+    du_int ua = (du_int)(a ^ s_a) - (du_int)s_a;         // negate if s_a == -1
+    du_int ub = (du_int)(b ^ s_b) - (du_int)s_b;         // negate if s_b == -1
+    s_a ^= s_b;                                          // sign of quotient
+    return (__udivmoddi4(ua, ub, (du_int *)0) ^ s_a) - s_a; // negate if s_a == -1
 }
 
 extern "C" u64 __umoddi3(du_int a, du_int b) {
@@ -399,13 +399,13 @@ extern "C" u64 __umoddi3(du_int a, du_int b) {
     return r;
 }
 
-extern "C" s64 __moddi3(di_int a, di_int b) {
+extern "C" di_int __moddi3(di_int a, di_int b) {
     const int bits_in_dword_m1 = (int)(sizeof(di_int) * CHAR_BIT) - 1;
-    di_int s = b >> bits_in_dword_m1; // s = b < 0 ? -1 : 0
-    b = (b ^ s) - s;                  // negate if s == -1
-    s = a >> bits_in_dword_m1;        // s = a < 0 ? -1 : 0
-    a = (a ^ s) - s;                  // negate if s == -1
+    di_int s = b >> bits_in_dword_m1;         // s = b < 0 ? -1 : 0
+    du_int ub = (du_int)(b ^ s) + (-s);      // negate if s == -1
+    s = a >> bits_in_dword_m1;               // s = a < 0 ? -1 : 0
+    du_int ua = (du_int)(a ^ s) + (-s);      // negate if s == -1
     du_int r;
-    __udivmoddi4(a, b, &r);
-    return ((di_int)r ^ s) - s; // negate if s == -1
+    __udivmoddi4(ua, ub, &r);
+    return ((di_int)r ^ s) - s;              // negate if s == -1
 }
